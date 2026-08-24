@@ -150,34 +150,69 @@ func TestTwitterIdempotency_ComprehensiveSuite(t *testing.T) {
 		raceKey := fmt.Sprintf("race_fresh_key_%d", time.Now().UnixNano())
 		const concurrency = 50
 		var wg sync.WaitGroup
-		var successCount int64
+		var initialPublisherWinner int64
+		var idempotentReplayCount int64
 		var inFlightConflictCount int64
+		var unexpectedErrorCount int64
+		var errorDetails []string
+		var mu sync.Mutex
+
 		initialCalls := atomic.LoadInt64(&tweetAPICallCount)
 
 		for i := 0; i < concurrency; i++ {
 			wg.Add(1)
-			go func() {
+			go func(workerID int) {
 				defer wg.Done()
 				resp, err := service.PublishTweet(ctx, &PublishTweetRequest{
 					UserID:         user.ID,
 					Content:        "Concurrent race tweet",
 					IdempotencyKey: raceKey,
 				})
-				if err == nil && resp.Status == "published" {
-					atomic.AddInt64(&successCount, 1)
-				} else if err != nil && (err == ErrPostProcessingInProgress || stringsContains(err.Error(), "409")) {
+
+				if err == nil {
+					if !resp.IsIdempotentReplay {
+						atomic.AddInt64(&initialPublisherWinner, 1)
+					} else {
+						atomic.AddInt64(&idempotentReplayCount, 1)
+					}
+				} else if err == ErrPostProcessingInProgress || stringsContains(err.Error(), "409") {
 					atomic.AddInt64(&inFlightConflictCount, 1)
+				} else {
+					atomic.AddInt64(&unexpectedErrorCount, 1)
+					mu.Lock()
+					errorDetails = append(errorDetails, fmt.Sprintf("worker %d unexpected error: %v", workerID, err))
+					mu.Unlock()
 				}
-			}()
+			}(i)
 		}
 		wg.Wait()
 
 		callsMade := atomic.LoadInt64(&tweetAPICallCount) - initialCalls
-		t.Logf("[Test B: Concurrent Fresh Race] Total Requests: %d | Published Winner: %d | 409 In-Flight Conflicts: %d | Upstream Calls: %d",
-			concurrency, successCount, inFlightConflictCount, callsMade)
+		totalAccounted := initialPublisherWinner + idempotentReplayCount + inFlightConflictCount + unexpectedErrorCount
+
+		t.Logf("=== TEST B: 50 GOROUTINE OUTCOME BREAKDOWN ===")
+		t.Logf("Total Requests Dispatched:        %d", concurrency)
+		t.Logf("1. Initial Publisher (Won Lock):  %d (Triggered Upstream Call)", initialPublisherWinner)
+		t.Logf("2. In-Flight 409 Conflicts:       %d (Caught processing lock / 23505 race)", inFlightConflictCount)
+		t.Logf("3. Idempotent Replays (Cached):   %d (Arrived after winner completed)", idempotentReplayCount)
+		t.Logf("4. Unexpected Errors:             %d", unexpectedErrorCount)
+		t.Logf("Total Requests Accounted For:     %d / %d (100.00%%)", totalAccounted, concurrency)
+		t.Logf("Upstream Twitter API Calls Made:  %d (Strict Idempotency Target: 1)", callsMade)
+
+		if len(errorDetails) > 0 {
+			t.Errorf("Unexpected worker errors: %v", errorDetails)
+		}
+
+		if totalAccounted != concurrency {
+			t.Fatalf("ACCOUNTABILITY FAILURE: %d requests dispatched but only %d accounted for!", concurrency, totalAccounted)
+		}
+
+		if initialPublisherWinner != 1 {
+			t.Fatalf("RACE CONDITION: Expected exactly 1 initial publisher winner, got %d", initialPublisherWinner)
+		}
 
 		if callsMade != 1 {
-			t.Fatalf("CRITICAL IDEMPOTENCY FAILURE: Expected exactly 1 Twitter API call under 50 concurrent requests, got %d", callsMade)
+			t.Fatalf("CRITICAL IDEMPOTENCY FAILURE: Expected exactly 1 Twitter API call, got %d", callsMade)
 		}
 	})
 
@@ -240,8 +275,11 @@ func TestTwitterIdempotency_ComprehensiveSuite(t *testing.T) {
 
 		const concurrency = 20
 		var wg sync.WaitGroup
-		var winnerCount int64
+		var reclaimWinnerCount int64
+		var idempotentReplayCount int64
 		var inFlightConflictCount int64
+		var unexpectedErrorCount int64
+
 		initialCalls := atomic.LoadInt64(&tweetAPICallCount)
 
 		for i := 0; i < concurrency; i++ {
@@ -253,18 +291,40 @@ func TestTwitterIdempotency_ComprehensiveSuite(t *testing.T) {
 					Content:        "Stale race tweet attempt",
 					IdempotencyKey: staleRaceKey,
 				})
-				if err == nil && resp.Status == "published" {
-					atomic.AddInt64(&winnerCount, 1)
-				} else if err != nil && (err == ErrPostProcessingInProgress || stringsContains(err.Error(), "409")) {
+				if err == nil {
+					if !resp.IsIdempotentReplay {
+						atomic.AddInt64(&reclaimWinnerCount, 1)
+					} else {
+						atomic.AddInt64(&idempotentReplayCount, 1)
+					}
+				} else if err == ErrPostProcessingInProgress || stringsContains(err.Error(), "409") {
 					atomic.AddInt64(&inFlightConflictCount, 1)
+				} else {
+					atomic.AddInt64(&unexpectedErrorCount, 1)
 				}
 			}()
 		}
 		wg.Wait()
 
 		callsMade := atomic.LoadInt64(&tweetAPICallCount) - initialCalls
-		t.Logf("[Test D: Stale Reclaim Race] Total Concurrent Workers: %d | Winner (RowsAffected=1): %d | 409 Conflicts: %d | Upstream Calls: %d",
-			concurrency, winnerCount, inFlightConflictCount, callsMade)
+		totalAccounted := reclaimWinnerCount + idempotentReplayCount + inFlightConflictCount + unexpectedErrorCount
+
+		t.Logf("=== TEST D: 20 STALE RECLAIM GOROUTINE BREAKDOWN ===")
+		t.Logf("Total Stale Workers Dispatched:    %d", concurrency)
+		t.Logf("1. Reclaim Winner (RowsAffected=1): %d", reclaimWinnerCount)
+		t.Logf("2. In-Flight 409 Conflicts:        %d (RowsAffected=0 lost conditional UPDATE)", inFlightConflictCount)
+		t.Logf("3. Idempotent Replays:             %d (Arrived after winner published)", idempotentReplayCount)
+		t.Logf("4. Unexpected Errors:              %d", unexpectedErrorCount)
+		t.Logf("Total Requests Accounted For:      %d / %d (100.00%%)", totalAccounted, concurrency)
+		t.Logf("Upstream Twitter API Calls Made:   %d (Strict Target: 1)", callsMade)
+
+		if totalAccounted != concurrency {
+			t.Fatalf("ACCOUNTABILITY FAILURE: %d workers dispatched but %d accounted for!", concurrency, totalAccounted)
+		}
+
+		if reclaimWinnerCount != 1 {
+			t.Fatalf("CRITICAL RACE FAILURE: Expected exactly 1 winner, got %d", reclaimWinnerCount)
+		}
 
 		if callsMade != 1 {
 			t.Fatalf("CRITICAL RACE FAILURE: Expected exactly 1 Twitter API call during stale reclaim race, got %d", callsMade)
