@@ -104,6 +104,22 @@ func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.Us
 	return &u, nil
 }
 
+// GetOrCreateUserByUsername retrieves an existing user by username or creates a new one.
+func (r *Repository) GetOrCreateUserByUsername(ctx context.Context, username, email string) (*models.User, error) {
+	if email == "" {
+		email = fmt.Sprintf("%s@example.com", username)
+	}
+
+	query := `SELECT id, email, username, created_at, updated_at FROM users WHERE username = $1;`
+	row := r.db.QueryRowContext(ctx, query, username)
+	var u models.User
+	if err := row.Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt, &u.UpdatedAt); err == nil {
+		return &u, nil
+	}
+
+	return r.CreateUser(ctx, email, username)
+}
+
 // StoreUserSession persists a hashed refresh token session with UTC timestamps.
 func (r *Repository) StoreUserSession(ctx context.Context, tokenHash, userID string, expiresAt time.Time) error {
 	now := time.Now().UTC()

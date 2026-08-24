@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/twitter"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
@@ -376,6 +377,14 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 					devUserID = "test_user_1"
 				}
 
+				// Resolve username string to valid PostgreSQL UUID
+				if _, err := uuid.Parse(devUserID); err != nil && s.repo != nil {
+					user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), devUserID, fmt.Sprintf("%s@example.com", devUserID))
+					if userErr == nil && user != nil {
+						devUserID = user.ID
+					}
+				}
+
 				ctx := database.WithActor(r.Context(), database.ActorContext{
 					ActorID:   devUserID,
 					IPAddress: extractClientIP(r),
@@ -423,7 +432,15 @@ func extractClientIP(r *http.Request) string {
 func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		userID = "default_user"
+		userID = "test_user_1"
+	}
+
+	// Resolve username string to valid PostgreSQL UUID
+	if _, err := uuid.Parse(userID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), userID, fmt.Sprintf("%s@example.com", userID))
+		if userErr == nil && user != nil {
+			userID = user.ID
+		}
 	}
 
 	// Generate PKCE code_verifier (32 random bytes url-safe base64)
@@ -533,9 +550,17 @@ func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Persist encrypted credentials into PostgreSQL Token Vault
+	actualUserID := oauthState.userID
+	if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+		if userErr == nil && user != nil {
+			actualUserID = user.ID
+		}
+	}
+
 	if s.repo != nil {
 		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-		err = s.repo.SavePlatformConnection(r.Context(), oauthState.userID, "twitter", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, twitter.RequiredScopes)
+		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "twitter", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, twitter.RequiredScopes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
 			return
@@ -552,9 +577,9 @@ func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Reques
 <div class="card">
 <div class="badge">Connected Successfully</div>
 <h1>Twitter/X Authorized</h1>
-<p>Your Twitter account has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong>.</p>
+<p>Your Twitter account has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong> (UUID: %s).</p>
 <p>You can now use the <code>publish_post</code> and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
 </div>
 </body>
-</html>`, oauthState.userID)
+</html>`, oauthState.userID, actualUserID)
 }
