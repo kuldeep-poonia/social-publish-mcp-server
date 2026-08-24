@@ -30,12 +30,18 @@ type Repository struct {
 
 // NewRepository initializes a Repository with database handle, 32-byte encryption key, and audit decorator.
 func NewRepository(db *sql.DB, cryptoKey []byte, auditWriter AuditWriter) *Repository {
-	return &Repository{
-		db:          db,
-		cryptoKey:   cryptoKey,
-		auditWriter: auditWriter,
-		decorator:   NewAuditedRepositoryDecorator(auditWriter),
+	repo := &Repository{
+		db:        db,
+		cryptoKey: cryptoKey,
 	}
+	if auditWriter != nil {
+		repo.auditWriter = auditWriter
+		repo.decorator = NewAuditedRepositoryDecorator(auditWriter)
+	} else {
+		repo.auditWriter = repo
+		repo.decorator = NewAuditedRepositoryDecorator(repo)
+	}
+	return repo
 }
 
 // ============================================================================
