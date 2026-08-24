@@ -151,6 +151,15 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			return nil, errors.New("unauthorized: authenticated user session required to publish")
 		}
 
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+		ctx = database.WithActor(ctx, database.ActorContext{ActorID: actualUserID, IPAddress: actor.IPAddress})
+
 		platform, _ := args["platform"].(string)
 		content, _ := args["content"].(string)
 		idempotencyKey, _ := args["idempotency_key"].(string)
@@ -171,7 +180,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}
 
 			resp, err := s.twitterService.PublishTweet(ctx, &twitter.PublishTweetRequest{
-				UserID:         actor.ActorID,
+				UserID:         actualUserID,
 				Content:        content,
 				MediaURLs:      mediaURLs,
 				IdempotencyKey: idempotencyKey,
@@ -215,7 +224,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}
 
 			resp, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
-				UserID:         actor.ActorID,
+				UserID:         actualUserID,
 				Title:          title,
 				Description:    description,
 				PrivacyStatus:  privacyStatus,
@@ -246,6 +255,15 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			return nil, errors.New("unauthorized: authenticated user session required for analytics")
 		}
 
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+		ctx = database.WithActor(ctx, database.ActorContext{ActorID: actualUserID, IPAddress: actor.IPAddress})
+
 		platform, _ := args["platform"].(string)
 		postID, _ := args["post_id"].(string)
 
@@ -255,7 +273,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 
 		switch platform {
 		case "twitter":
-			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "twitter")
+			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "twitter")
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving Twitter credentials: %w", err)
 			}
@@ -274,7 +292,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}, nil
 
 		case "youtube":
-			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "youtube")
+			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving YouTube credentials: %w", err)
 			}
