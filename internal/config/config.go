@@ -140,27 +140,29 @@ func getEnvAsInt(key string, fallback int) int {
 	return val
 }
 
-func loadDotEnv(filepath string) {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+func loadDotEnv(filenames ...string) {
+	for _, fn := range filenames {
+		file, err := os.Open(fn)
+		if err != nil {
 			continue
 		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(parts[1])
-			val = strings.Trim(val, `"'`)
-			if os.Getenv(key) == "" {
-				_ = os.Setenv(key, val)
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+				val = strings.Trim(val, `"'`)
+				if key != "" && val != "" && os.Getenv(key) == "" {
+					_ = os.Setenv(key, val)
+				}
 			}
 		}
+		_ = file.Close()
+		return
 	}
 }

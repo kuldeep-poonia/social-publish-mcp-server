@@ -58,6 +58,8 @@ func run(ctx context.Context, cfg *config.Config) error {
 		log.Println("PostgreSQL connection pool established and verified.")
 	}
 
+	log.Printf("Twitter Integration Status: ClientID configured: %t, RedirectURI: %s", cfg.TwitterClientID != "", cfg.TwitterRedirectURI)
+
 	repo := database.NewRepository(db, cfg.TokenEncryptionKey, nil)
 	httpServer := server.NewHTTPServer(cfg, db, repo)
 
