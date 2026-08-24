@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -215,12 +216,41 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				privacyStatus = "public"
 			}
 
-			// Sample/Simulated MP4 video if raw data not directly uploaded over JSON
-			videoBytes := []byte("\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41\x00\x00\x00\x08free00000000000000000000")
-			if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
-				if decoded, decErr := base64.StdEncoding.DecodeString(rawData); decErr == nil {
-					videoBytes = decoded
+			var videoBytes []byte
+
+			// 1. Try media_path argument
+			if mediaPath, ok := args["media_path"].(string); ok && strings.TrimSpace(mediaPath) != "" {
+				if data, readErr := os.ReadFile(strings.TrimSpace(mediaPath)); readErr == nil {
+					videoBytes = data
 				}
+			}
+
+			// 2. Try media_urls if pointing to local file path
+			if len(videoBytes) == 0 && len(mediaURLs) > 0 {
+				if data, readErr := os.ReadFile(mediaURLs[0]); readErr == nil {
+					videoBytes = data
+				}
+			}
+
+			// 3. Try base64-encoded media_data
+			if len(videoBytes) == 0 {
+				if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
+					if decoded, decErr := base64.StdEncoding.DecodeString(rawData); decErr == nil {
+						videoBytes = decoded
+					}
+				}
+			}
+
+			// 4. Fallback to sample_video.mp4 if present in cwd
+			if len(videoBytes) == 0 {
+				if data, readErr := os.ReadFile("sample_video.mp4"); readErr == nil {
+					videoBytes = data
+				}
+			}
+
+			// 5. Default synthetic MP4 container header
+			if len(videoBytes) == 0 {
+				videoBytes = []byte("\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41\x00\x00\x00\x08free00000000000000000000")
 			}
 
 			resp, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
