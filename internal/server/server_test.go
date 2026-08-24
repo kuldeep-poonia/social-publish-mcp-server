@@ -23,7 +23,7 @@ func TestServer_FullEndToEndIntegration(t *testing.T) {
 		TokenEncryptionKey: make([]byte, 32),
 	}
 
-	httpServer := NewHTTPServer(cfg, nil)
+	httpServer := NewHTTPServer(cfg, nil, nil)
 	ts := httptest.NewServer(httpServer.server.Handler)
 	defer ts.Close()
 
@@ -164,7 +164,7 @@ func TestServer_RateLimitingMiddleware_429Enforcement(t *testing.T) {
 		TokenEncryptionKey: make([]byte, 32),
 	}
 
-	httpServer := NewHTTPServer(cfg, nil)
+	httpServer := NewHTTPServer(cfg, nil, nil)
 	ts := httptest.NewServer(httpServer.server.Handler)
 	defer ts.Close()
 

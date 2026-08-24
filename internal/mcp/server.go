@@ -61,6 +61,87 @@ func (s *Server) registerPingTool() {
 	})
 }
 
+// RegisterSocialTools registers standard schemas for publish_post, get_analytics, and connect_platform tools.
+func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHandler ToolHandler) {
+	publishSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["twitter", "youtube", "instagram"],
+				"description": "Target social media platform"
+			},
+			"content": {
+				"type": "string",
+				"description": "Text content or caption of the post"
+			},
+			"media_urls": {
+				"type": "array",
+				"items": {"type": "string"},
+				"description": "Optional URLs of media attachments to upload"
+			},
+			"idempotency_key": {
+				"type": "string",
+				"description": "Optional unique idempotency key to prevent duplicate publishing"
+			}
+		},
+		"required": ["platform", "content"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "publish_post",
+		Description: "Publish a text, image, or video post to a connected social platform with idempotency protection",
+		InputSchema: json.RawMessage(publishSchema),
+	}, publishHandler)
+
+	analyticsSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["twitter", "youtube", "instagram"],
+				"description": "Target social media platform"
+			},
+			"post_id": {
+				"type": "string",
+				"description": "Platform post/tweet/video ID to retrieve analytics for"
+			}
+		},
+		"required": ["platform", "post_id"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "get_analytics",
+		Description: "Retrieve engagement metrics (impressions, likes, retweets, replies) for a published post",
+		InputSchema: json.RawMessage(analyticsSchema),
+	}, analyticsHandler)
+
+	connectSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["twitter", "youtube", "instagram"],
+				"description": "Social media platform to connect via OAuth 2.0 PKCE"
+			},
+			"redirect_uri": {
+				"type": "string",
+				"description": "Optional OAuth callback redirect URI"
+			}
+		},
+		"required": ["platform"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "connect_platform",
+		Description: "Generate an OAuth 2.0 PKCE authorization URL to connect a user's social media account",
+		InputSchema: json.RawMessage(connectSchema),
+	}, connectHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()

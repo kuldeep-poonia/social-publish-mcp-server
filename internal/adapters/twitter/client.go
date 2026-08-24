@@ -352,6 +352,14 @@ func (c *Client) executeWithBackoff(req *http.Request) (*http.Response, error) {
 	var err error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 && req.GetBody != nil {
+			newBody, getErr := req.GetBody()
+			if getErr != nil {
+				return nil, getErr
+			}
+			req.Body = newBody
+		}
+
 		resp, err = c.httpClient.Do(req)
 		if err != nil {
 			return nil, err

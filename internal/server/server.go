@@ -3,12 +3,15 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/twitter"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
@@ -18,30 +21,43 @@ import (
 
 // HTTPServer represents the configured HTTP server.
 type HTTPServer struct {
-	server      *http.Server
-	oauthServer *auth.OAuthServer
-	mcpServer   *mcp.Server
-	transport   *mcp.HTTPTransport
-	limiter     ratelimit.Limiter
-	cfg         *config.Config
-	repo        *database.Repository
+	server         *http.Server
+	oauthServer    *auth.OAuthServer
+	mcpServer      *mcp.Server
+	transport      *mcp.HTTPTransport
+	limiter        ratelimit.Limiter
+	cfg            *config.Config
+	repo           *database.Repository
+	twitterService *twitter.Service
+	twitterClient  *twitter.Client
 }
 
 // NewHTTPServer builds and configures the HTTP server with all routes and middleware.
-func NewHTTPServer(cfg *config.Config, repo *database.Repository) *HTTPServer {
+func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *HTTPServer {
 	oauthServer := auth.NewOAuthServer(cfg.JWTSigningSecret)
 	mcpServer := mcp.NewServer()
 	transport := mcp.NewHTTPTransport(mcpServer)
 	limiter := ratelimit.NewTokenBucketLimiter(100.0, 200.0) // 100 RPS with 200 burst
 
-	s := &HTTPServer{
-		oauthServer: oauthServer,
-		mcpServer:   mcpServer,
-		transport:   transport,
-		limiter:     limiter,
-		cfg:         cfg,
-		repo:        repo,
+	twitterClient := twitter.NewClient(cfg.TwitterClientID, cfg.TwitterClientSecret)
+	var twitterService *twitter.Service
+	if db != nil && repo != nil {
+		twitterService = twitter.NewService(db, repo, twitterClient)
 	}
+
+	s := &HTTPServer{
+		oauthServer:    oauthServer,
+		mcpServer:      mcpServer,
+		transport:      transport,
+		limiter:        limiter,
+		cfg:            cfg,
+		repo:           repo,
+		twitterService: twitterService,
+		twitterClient:  twitterClient,
+	}
+
+	// Register Social Publishing MCP Tools
+	s.registerMCPToolHandlers()
 
 	mux := http.NewServeMux()
 
@@ -69,6 +85,115 @@ func NewHTTPServer(cfg *config.Config, repo *database.Repository) *HTTPServer {
 	}
 
 	return s
+}
+
+func (s *HTTPServer) registerMCPToolHandlers() {
+	publishHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to publish")
+		}
+
+		platform, _ := args["platform"].(string)
+		content, _ := args["content"].(string)
+		idempotencyKey, _ := args["idempotency_key"].(string)
+
+		var mediaURLs []string
+		if rawURLs, ok := args["media_urls"].([]interface{}); ok {
+			for _, u := range rawURLs {
+				if str, ok := u.(string); ok {
+					mediaURLs = append(mediaURLs, str)
+				}
+			}
+		}
+
+		if platform != "twitter" {
+			return nil, fmt.Errorf("platform '%s' is not supported in current release (only 'twitter' active)", platform)
+		}
+
+		if s.twitterService == nil {
+			return nil, errors.New("twitter service is not initialized")
+		}
+
+		resp, err := s.twitterService.PublishTweet(ctx, &twitter.PublishTweetRequest{
+			UserID:         actor.ActorID,
+			Content:        content,
+			MediaURLs:      mediaURLs,
+			IdempotencyKey: idempotencyKey,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		resultJSON, _ := json.Marshal(resp)
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	analyticsHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required for analytics")
+		}
+
+		platform, _ := args["platform"].(string)
+		postID, _ := args["post_id"].(string)
+
+		if platform != "twitter" {
+			return nil, fmt.Errorf("platform '%s' is not supported in current release", platform)
+		}
+
+		if s.repo == nil {
+			return nil, errors.New("database repository is not initialized")
+		}
+
+		accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "twitter")
+		if err != nil {
+			return nil, fmt.Errorf("failed retrieving Twitter credentials: %w", err)
+		}
+
+		metrics, err := s.twitterClient.GetTweetAnalytics(ctx, string(accessBytes), postID)
+		if err != nil {
+			return nil, fmt.Errorf("failed retrieving tweet analytics: %w", err)
+		}
+
+		resultJSON, _ := json.Marshal(metrics)
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	connectHandler := func(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		platform, _ := args["platform"].(string)
+		if platform != "twitter" {
+			return nil, fmt.Errorf("platform '%s' connection is not supported yet", platform)
+		}
+
+		authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&scope=%s&code_challenge=S256_CHALLENGE&code_challenge_method=S256",
+			twitter.OAuthAuthorizeURL, s.cfg.TwitterClientID, strings.Join(twitter.RequiredScopes, "+"))
+
+		payload := map[string]string{
+			"platform":      "twitter",
+			"authorize_url": authURL,
+			"status":        "action_required",
+		}
+		bytes, _ := json.Marshal(payload)
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(bytes)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler)
 }
 
 // Start runs the HTTP server.

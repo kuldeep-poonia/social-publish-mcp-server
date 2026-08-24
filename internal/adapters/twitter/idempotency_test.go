@@ -17,7 +17,14 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/crypto"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/pkg/models"
 )
+
+type testAuditWriter struct{}
+
+func (t *testAuditWriter) WriteAuditLog(_ context.Context, _ *models.AuditLog) error {
+	return nil
+}
 
 func setupTestDB(t *testing.T) (*sql.DB, *database.Repository, *config.Config) {
 	cfg, err := config.LoadConfig()
@@ -53,7 +60,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *database.Repository, *config.Config) {
 
 	cryptoKey := make([]byte, crypto.KeySizeAES256)
 	copy(cryptoKey, cfg.TokenEncryptionKey)
-	repo := database.NewRepository(db, cryptoKey, nil)
+	repo := database.NewRepository(db, cryptoKey, &testAuditWriter{})
 
 	return db, repo, cfg
 }

@@ -31,23 +31,37 @@ type Config struct {
 	// Security & Cryptography
 	TokenEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM
 	JWTSigningSecret   []byte // Min 32 bytes for HMAC-SHA256
+
+	// Social Platform OAuth Credentials
+	TwitterClientID     string
+	TwitterClientSecret string
+	YouTubeClientID     string
+	YouTubeClientSecret string
+	InstagramClientID   string
+	InstagramClientSecret string
 }
 
 // LoadConfig reads configuration from environment variables and validates critical constraints.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		ServerPort:       getEnvAsInt("SERVER_PORT", 8080),
-		ServerHost:       getEnv("SERVER_HOST", "0.0.0.0"),
-		Environment:      getEnv("ENVIRONMENT", "development"),
-		PostgresHost:     getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:     getEnvAsInt("POSTGRES_PORT", 5432),
-		PostgresUser:     getEnv("POSTGRES_USER", "postgres"),
-		PostgresPassword: getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
-		PostgresDB:       getEnv("POSTGRES_DB", "social_mcp_db"),
-		PostgresSSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
-		RedisHost:        getEnv("REDIS_HOST", "localhost"),
-		RedisPort:        getEnvAsInt("REDIS_PORT", 6379),
-		RedisPassword:    getEnv("REDIS_PASSWORD", ""),
+		ServerPort:            getEnvAsInt("SERVER_PORT", 8080),
+		ServerHost:            getEnv("SERVER_HOST", "0.0.0.0"),
+		Environment:           getEnv("ENVIRONMENT", "development"),
+		PostgresHost:          getEnv("POSTGRES_HOST", "localhost"),
+		PostgresPort:          getEnvAsInt("POSTGRES_PORT", 5432),
+		PostgresUser:          getEnv("POSTGRES_USER", "postgres"),
+		PostgresPassword:      getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
+		PostgresDB:            getEnv("POSTGRES_DB", "social_mcp_db"),
+		PostgresSSLMode:       getEnv("POSTGRES_SSLMODE", "disable"),
+		RedisHost:             getEnv("REDIS_HOST", "localhost"),
+		RedisPort:             getEnvAsInt("REDIS_PORT", 6379),
+		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
+		TwitterClientID:       getEnv("TWITTER_CLIENT_ID", ""),
+		TwitterClientSecret:   getEnv("TWITTER_CLIENT_SECRET", ""),
+		YouTubeClientID:       getEnv("YOUTUBE_CLIENT_ID", ""),
+		YouTubeClientSecret:   getEnv("YOUTUBE_CLIENT_SECRET", ""),
+		InstagramClientID:     getEnv("INSTAGRAM_CLIENT_ID", ""),
+		InstagramClientSecret: getEnv("INSTAGRAM_CLIENT_SECRET", ""),
 	}
 
 	// Validate and decode Token Encryption Key

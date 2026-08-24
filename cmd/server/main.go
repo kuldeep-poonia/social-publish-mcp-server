@@ -59,7 +59,7 @@ func run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	repo := database.NewRepository(db, cfg.TokenEncryptionKey, nil)
-	httpServer := server.NewHTTPServer(cfg, repo)
+	httpServer := server.NewHTTPServer(cfg, db, repo)
 
 	serverErrChan := make(chan error, 1)
 	go func() {
