@@ -48,6 +48,18 @@ type HTTPServer struct {
 // NewHTTPServer builds and configures the HTTP server with all routes and middleware.
 func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *HTTPServer {
 	oauthServer := auth.NewOAuthServer(cfg.JWTSigningSecret)
+	
+	// Pre-register standard OAuth clients for Claude Desktop, MCP SDKs, and local CLI
+	allowedRedirects := []string{
+		"http://localhost:8080/callback",
+		"http://127.0.0.1:8080/callback",
+		"http://localhost:8080/auth/twitter/callback",
+		"claude://oauth/callback",
+	}
+	_ = oauthServer.RegisterClient("mcp_client_desktop", "", "MCP Desktop Client", allowedRedirects)
+	_ = oauthServer.RegisterClient("claude_desktop", "", "Claude Desktop Client", allowedRedirects)
+	_ = oauthServer.RegisterClient("curl_test", "", "Curl Test Client", allowedRedirects)
+
 	mcpServer := mcp.NewServer()
 	transport := mcp.NewHTTPTransport(mcpServer)
 	limiter := ratelimit.NewTokenBucketLimiter(100.0, 200.0) // 100 RPS with 200 burst
@@ -344,6 +356,24 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		if strings.TrimSpace(tokenStr) == "" {
+			// In local development mode, allow direct developer access with default user or X-User-ID header
+			if s.cfg.Environment == "development" {
+				devUserID := r.Header.Get("X-User-ID")
+				if devUserID == "" {
+					devUserID = r.URL.Query().Get("user_id")
+				}
+				if devUserID == "" {
+					devUserID = "test_user_1"
+				}
+
+				ctx := database.WithActor(r.Context(), database.ActorContext{
+					ActorID:   devUserID,
+					IPAddress: extractClientIP(r),
+				})
+				next(w, r.WithContext(ctx))
+				return
+			}
+
 			http.Error(w, "Unauthorized: missing Bearer token", http.StatusUnauthorized)
 			return
 		}
