@@ -218,39 +218,36 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 
 			var videoBytes []byte
 
-			// 1. Try media_path argument
+			// 1. Check media_path argument
 			if mediaPath, ok := args["media_path"].(string); ok && strings.TrimSpace(mediaPath) != "" {
-				if data, readErr := os.ReadFile(strings.TrimSpace(mediaPath)); readErr == nil {
-					videoBytes = data
+				data, readErr := os.ReadFile(strings.TrimSpace(mediaPath))
+				if readErr != nil {
+					return nil, fmt.Errorf("failed reading video file from media_path '%s': %w", mediaPath, readErr)
 				}
+				videoBytes = data
 			}
 
-			// 2. Try media_urls if pointing to local file path
+			// 2. Check media_urls if pointing to local file path
 			if len(videoBytes) == 0 && len(mediaURLs) > 0 {
-				if data, readErr := os.ReadFile(mediaURLs[0]); readErr == nil {
+				data, readErr := os.ReadFile(mediaURLs[0])
+				if readErr == nil {
 					videoBytes = data
 				}
 			}
 
-			// 3. Try base64-encoded media_data
+			// 3. Check base64-encoded media_data
 			if len(videoBytes) == 0 {
 				if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
-					if decoded, decErr := base64.StdEncoding.DecodeString(rawData); decErr == nil {
-						videoBytes = decoded
+					decoded, decErr := base64.StdEncoding.DecodeString(rawData)
+					if decErr != nil {
+						return nil, fmt.Errorf("invalid base64 encoding in media_data: %w", decErr)
 					}
+					videoBytes = decoded
 				}
 			}
 
-			// 4. Fallback to sample_video.mp4 if present in cwd
 			if len(videoBytes) == 0 {
-				if data, readErr := os.ReadFile("sample_video.mp4"); readErr == nil {
-					videoBytes = data
-				}
-			}
-
-			// 5. Default synthetic MP4 container header
-			if len(videoBytes) == 0 {
-				videoBytes = []byte("\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41\x00\x00\x00\x08free00000000000000000000")
+				return nil, errors.New("youtube video publishing requires a valid video file: please provide 'media_path' (path to video file), 'media_urls', or 'media_data' (base64)")
 			}
 
 			resp, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
