@@ -3,12 +3,17 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/twitter"
@@ -18,6 +23,12 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
 )
+
+type twitterOAuthState struct {
+	codeVerifier string
+	userID       string
+	expiresAt    time.Time
+}
 
 // HTTPServer represents the configured HTTP server.
 type HTTPServer struct {
@@ -30,6 +41,8 @@ type HTTPServer struct {
 	repo           *database.Repository
 	twitterService *twitter.Service
 	twitterClient  *twitter.Client
+	oauthStatesMu  sync.Mutex
+	oauthStates    map[string]twitterOAuthState
 }
 
 // NewHTTPServer builds and configures the HTTP server with all routes and middleware.
@@ -54,6 +67,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		repo:           repo,
 		twitterService: twitterService,
 		twitterClient:  twitterClient,
+		oauthStates:    make(map[string]twitterOAuthState),
 	}
 
 	// Register Social Publishing MCP Tools
@@ -67,6 +81,10 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	// OAuth 2.1 Endpoints
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorize)
 	mux.HandleFunc("/oauth/token", s.handleToken)
+
+	// Twitter Live Browser OAuth Connect & Callback Handlers
+	mux.HandleFunc("/auth/twitter/connect", s.handleTwitterConnect)
+	mux.HandleFunc("/auth/twitter/callback", s.handleTwitterCallback)
 
 	// MCP Protocol Endpoints
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
@@ -359,4 +377,118 @@ func extractClientIP(r *http.Request) string {
 		return parts[0]
 	}
 	return "127.0.0.1"
+}
+
+// handleTwitterConnect initiates Twitter OAuth 2.0 PKCE browser authentication.
+func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = "default_user"
+	}
+
+	// Generate PKCE code_verifier (32 random bytes url-safe base64)
+	verifierBytes := make([]byte, 32)
+	_, _ = rand.Read(verifierBytes)
+	codeVerifier := base64.RawURLEncoding.EncodeToString(verifierBytes)
+
+	// Compute S256 code_challenge
+	hash := sha256.Sum256([]byte(codeVerifier))
+	codeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+
+	// Generate random state
+	stateBytes := make([]byte, 16)
+	_, _ = rand.Read(stateBytes)
+	state := hex.EncodeToString(stateBytes)
+
+	// Save state mapping
+	s.oauthStatesMu.Lock()
+	s.oauthStates[state] = twitterOAuthState{
+		codeVerifier: codeVerifier,
+		userID:       userID,
+		expiresAt:    time.Now().Add(10 * time.Minute),
+	}
+	s.oauthStatesMu.Unlock()
+
+	callbackURL := fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
+	if s.cfg.ServerHost == "0.0.0.0" {
+		callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
+	}
+
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
+		twitter.OAuthAuthorizeURL,
+		s.cfg.TwitterClientID,
+		callbackURL,
+		strings.Join(twitter.RequiredScopes, "+"),
+		state,
+		codeChallenge,
+	)
+
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// handleTwitterCallback handles the OAuth 2.0 callback from Twitter.
+func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	code := q.Get("code")
+	state := q.Get("state")
+	errParam := q.Get("error")
+
+	if errParam != "" {
+		http.Error(w, fmt.Sprintf("Twitter OAuth Authorization Denied: %s", errParam), http.StatusBadRequest)
+		return
+	}
+
+	if code == "" || state == "" {
+		http.Error(w, "Invalid callback: code and state required", http.StatusBadRequest)
+		return
+	}
+
+	s.oauthStatesMu.Lock()
+	oauthState, exists := s.oauthStates[state]
+	if exists {
+		delete(s.oauthStates, state)
+	}
+	s.oauthStatesMu.Unlock()
+
+	if !exists || time.Now().After(oauthState.expiresAt) {
+		http.Error(w, "Invalid or expired OAuth state parameter (replay attack prevented)", http.StatusBadRequest)
+		return
+	}
+
+	callbackURL := fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
+	if s.cfg.ServerHost == "0.0.0.0" {
+		callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
+	}
+
+	tokenResp, err := s.twitterClient.ExchangeOAuthToken(r.Context(), code, oauthState.codeVerifier, callbackURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed exchanging authorization code with Twitter API v2: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Persist encrypted credentials into PostgreSQL Token Vault
+	if s.repo != nil {
+		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		err = s.repo.SavePlatformConnection(r.Context(), oauthState.userID, "twitter", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, twitter.RequiredScopes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, `
+<!DOCTYPE html>
+<html>
+<head><title>Twitter Connected</title><style>body{font-family:sans-serif;background:#0f1419;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;} .card{background:#1e2732;padding:40px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-width:480px;} h1{color:#1d9bf0;margin-bottom:12px;} p{color:#8b98a5;line-height:1.6;} .badge{background:#00ba7c22;color:#00ba7c;padding:6px 16px;border-radius:20px;display:inline-block;font-weight:bold;margin-bottom:16px;}</style></head>
+<body>
+<div class="card">
+<div class="badge">Connected Successfully</div>
+<h1>Twitter/X Authorized</h1>
+<p>Your Twitter account has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong>.</p>
+<p>You can now use the <code>publish_post</code> and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
+</div>
+</body>
+</html>`, oauthState.userID)
 }
