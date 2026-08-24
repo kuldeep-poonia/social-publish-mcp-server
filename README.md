@@ -6,16 +6,19 @@
 
 A production-grade, multi-tenant, universal **Model Context Protocol (MCP)** server that enables MCP-compliant LLM clients (such as Claude, ChatGPT via connector, Gemini, and custom agents) to securely publish content across social platforms and retrieve engagement analytics under direct, authenticated user authorization.
 
+📖 **Architecture Specification**: For detailed visual workflows and security diagrams, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ---
 
 ## 🎯 Key Features
 
 - **Multi-Platform Content Publishing**: Publish text, media, and video to **Twitter/X**, **YouTube**, and **Instagram** (Business/Creator accounts).
 - **Engagement Analytics Retrieval**: Inspect impressions, reach, likes, comments, and shares directly within the LLM conversation.
-- **Strict Zero-Trust Token Vault**: AES-256-GCM encryption at rest for all OAuth tokens with user-level isolation and cryptographic boundary enforcement.
-- **Universal MCP Compliance**: Compatible with any client implementing the Model Context Protocol standard over Streamable HTTP.
-- **Idempotent Operations & Rate Limiting**: Distributed Redis-backed rate limiting and idempotency controls preventing duplicate posts and API quota overages.
-- **Auditability**: Structured audit logs capturing all actions and token lifecycle events without ever exposing plaintext secrets or payloads.
+- **Strict Zero-Trust Token Vault**: AES-256-GCM authenticated encryption for all OAuth tokens with user-level isolation and cryptographic boundary enforcement.
+- **OAuth 2.1 Server with Mandatory PKCE**: Compliant authorization code flow enforcing `code_challenge_method=S256` and instant replay prevention.
+- **Universal MCP Compliance**: Compatible with any client implementing the Model Context Protocol standard over Streamable HTTP and SSE transports.
+- **Idempotent Operations & Rate Limiting**: Sliding-window token-bucket rate limiting and idempotency controls preventing duplicate posts and API quota overages.
+- **100% Automated Write Auditing**: Structured audit logs capturing all actions without ever exposing plaintext secrets or tokens (`[REDACTED]`).
 
 ---
 
