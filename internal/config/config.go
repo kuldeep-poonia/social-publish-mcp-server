@@ -37,6 +37,7 @@ type Config struct {
 	// Social Platform OAuth Credentials
 	TwitterClientID       string
 	TwitterClientSecret   string
+	TwitterRedirectURI    string
 	YouTubeClientID       string
 	YouTubeClientSecret   string
 	InstagramClientID     string
@@ -65,6 +66,7 @@ func LoadConfig() (*Config, error) {
 		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
 		TwitterClientID:       getEnv("TWITTER_CLIENT_ID", ""),
 		TwitterClientSecret:   getEnv("TWITTER_CLIENT_SECRET", ""),
+		TwitterRedirectURI:    getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/auth/twitter/callback"),
 		YouTubeClientID:       getEnv("YOUTUBE_CLIENT_ID", ""),
 		YouTubeClientSecret:   getEnv("YOUTUBE_CLIENT_SECRET", ""),
 		InstagramClientID:     getEnv("INSTAGRAM_CLIENT_ID", ""),

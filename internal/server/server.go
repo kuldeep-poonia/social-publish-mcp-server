@@ -27,6 +27,7 @@ import (
 type twitterOAuthState struct {
 	codeVerifier string
 	userID       string
+	redirectURI  string
 	expiresAt    time.Time
 }
 
@@ -54,6 +55,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		"http://localhost:8080/callback",
 		"http://127.0.0.1:8080/callback",
 		"http://localhost:8080/auth/twitter/callback",
+		"http://localhost:8080/auth/callback/twitter",
 		"claude://oauth/callback",
 	}
 	_ = oauthServer.RegisterClient("mcp_client_desktop", "", "MCP Desktop Client", allowedRedirects)
@@ -94,9 +96,11 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorize)
 	mux.HandleFunc("/oauth/token", s.handleToken)
 
-	// Twitter Live Browser OAuth Connect & Callback Handlers
+	// Twitter Live Browser OAuth Connect & Callback Handlers (supports both /auth/twitter/callback and /auth/callback/twitter)
 	mux.HandleFunc("/auth/twitter/connect", s.handleTwitterConnect)
 	mux.HandleFunc("/auth/twitter/callback", s.handleTwitterCallback)
+	mux.HandleFunc("/auth/callback/twitter", s.handleTwitterCallback)
+	mux.HandleFunc("/auth/callback", s.handleTwitterCallback)
 
 	// MCP Protocol Endpoints
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
@@ -436,19 +440,23 @@ func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request
 	_, _ = rand.Read(stateBytes)
 	state := hex.EncodeToString(stateBytes)
 
+	callbackURL := strings.TrimSpace(s.cfg.TwitterRedirectURI)
+	if callbackURL == "" {
+		callbackURL = fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
+		if s.cfg.ServerHost == "0.0.0.0" {
+			callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
+		}
+	}
+
 	// Save state mapping
 	s.oauthStatesMu.Lock()
 	s.oauthStates[state] = twitterOAuthState{
 		codeVerifier: codeVerifier,
 		userID:       userID,
+		redirectURI:  callbackURL,
 		expiresAt:    time.Now().Add(10 * time.Minute),
 	}
 	s.oauthStatesMu.Unlock()
-
-	callbackURL := fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
-	if s.cfg.ServerHost == "0.0.0.0" {
-		callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
-	}
 
 	params := make(map[string][]string)
 	params["response_type"] = []string{"code"}
@@ -518,12 +526,7 @@ func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	callbackURL := fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
-	if s.cfg.ServerHost == "0.0.0.0" {
-		callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
-	}
-
-	tokenResp, err := s.twitterClient.ExchangeOAuthToken(r.Context(), code, oauthState.codeVerifier, callbackURL)
+	tokenResp, err := s.twitterClient.ExchangeOAuthToken(r.Context(), code, oauthState.codeVerifier, oauthState.redirectURI)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed exchanging authorization code with Twitter API v2: %v", err), http.StatusBadRequest)
 		return
