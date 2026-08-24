@@ -1,0 +1,53 @@
+# Internal project planning documents (confidential)
+docs-internal/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+/secrets/
+secrets/
+
+# Raw media / video recordings (stored separately)
+videos/
+/videos/
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+
+# Binaries and build artifacts
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+cover.out
+
+# Dependency and cache directories
+vendor/
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.gemini/
+
+# Logs and scratch
+*.log
+logs/
+scratch/
+tmp/
