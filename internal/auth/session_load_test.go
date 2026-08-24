@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// BenchmarkSessionIssuance measures the raw single-thread and parallel throughput of token generation.
-func BenchmarkSessionIssuance_SingleThread(b *testing.B) {
+// BenchmarkSessionIssuance_CryptoOnly_SingleThread measures the raw single-thread CPU throughput of token generation without DB.
+func BenchmarkSessionIssuance_CryptoOnly_SingleThread(b *testing.B) {
 	secret := []byte("a-very-secure-jwt-signing-secret-minimum-32-chars-long")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -22,7 +22,8 @@ func BenchmarkSessionIssuance_SingleThread(b *testing.B) {
 	}
 }
 
-func BenchmarkSessionIssuance_Parallel(b *testing.B) {
+// BenchmarkSessionIssuance_CryptoOnly_Parallel measures parallel CPU throughput of token generation without DB.
+func BenchmarkSessionIssuance_CryptoOnly_Parallel(b *testing.B) {
 	secret := []byte("a-very-secure-jwt-signing-secret-minimum-32-chars-long")
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -35,7 +36,8 @@ func BenchmarkSessionIssuance_Parallel(b *testing.B) {
 	})
 }
 
-func TestSessionIssuance_LoadConcurrency(t *testing.T) {
+// TestSessionIssuance_CryptoOnly_LoadConcurrency tests raw CPU token generation without database persistence.
+func TestSessionIssuance_CryptoOnly_LoadConcurrency(t *testing.T) {
 	secret := []byte("a-very-secure-jwt-signing-secret-minimum-32-chars-long")
 
 	// Warm up runtime, cryptographic buffers, and memory allocator
@@ -49,13 +51,13 @@ func TestSessionIssuance_LoadConcurrency(t *testing.T) {
 		targetRateRPS int
 		totalRequests int
 	}{
-		{name: "Load_100_RPS", targetRateRPS: 100, totalRequests: 300},
-		{name: "Load_500_RPS", targetRateRPS: 500, totalRequests: 1000},
-		{name: "Load_1000_RPS", targetRateRPS: 1000, totalRequests: 2000},
+		{name: "CryptoOnly_100_RPS", targetRateRPS: 100, totalRequests: 300},
+		{name: "CryptoOnly_500_RPS", targetRateRPS: 500, totalRequests: 1000},
+		{name: "CryptoOnly_1000_RPS", targetRateRPS: 1000, totalRequests: 2000},
 	}
 
 	t.Logf("================================================================================")
-	t.Logf("           HIGH-PRECISION SESSION ISSUANCE LOAD & CONCURRENCY TEST              ")
+	t.Logf("       CPU/CRYPTO-ONLY SESSION ISSUANCE BENCHMARK (WITHOUT DATABASE WRITE)      ")
 	t.Logf("================================================================================")
 
 	for _, sc := range scenarios {
@@ -82,7 +84,6 @@ func TestSessionIssuance_LoadConcurrency(t *testing.T) {
 					_, err := IssueSessionTokens(userID, "user", secret)
 					duration := time.Since(opStart)
 
-					// High-precision nanosecond conversion to milliseconds float
 					latenciesMs[idx] = float64(duration.Nanoseconds()) / 1_000_000.0
 
 					if err != nil {
@@ -94,7 +95,6 @@ func TestSessionIssuance_LoadConcurrency(t *testing.T) {
 			wg.Wait()
 			totalElapsed := time.Since(startOverall)
 
-			// Sort full latency distribution without dropping fast sub-microsecond requests
 			sortedLatencies := make([]float64, len(latenciesMs))
 			copy(sortedLatencies, latenciesMs)
 			sort.Float64s(sortedLatencies)
@@ -110,10 +110,10 @@ func TestSessionIssuance_LoadConcurrency(t *testing.T) {
 			actualRPS := float64(sc.totalRequests) / totalElapsed.Seconds()
 			errorRate := (float64(errorCount) / float64(sc.totalRequests)) * 100.0
 
-			t.Logf("[%s] Target: %d RPS | Total Requests: %d | Actual RPS: %.1f | Elapsed: %v",
+			t.Logf("[%s] Target: %d RPS | Total Req: %d | Actual RPS: %.1f | Elapsed: %v",
 				sc.name, sc.targetRateRPS, sc.totalRequests, actualRPS, totalElapsed)
 			t.Logf("[%s] Errors: %d (Error Rate: %.2f%%)", sc.name, errorCount, errorRate)
-			t.Logf("[%s] Latency -> min: %.3fms | p50: %.3fms | p90: %.3fms | p95: %.3fms | p99: %.3fms | max: %.3fms",
+			t.Logf("[%s] CPU-only Latency -> min: %.3fms | p50: %.3fms | p90: %.3fms | p95: %.3fms | p99: %.3fms | max: %.3fms",
 				sc.name, minLat, p50, p90, p95, p99, maxLat)
 
 			if errorCount != 0 {
