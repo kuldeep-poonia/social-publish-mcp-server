@@ -2,10 +2,12 @@
 package config
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all server configuration variables.
@@ -33,16 +35,21 @@ type Config struct {
 	JWTSigningSecret   []byte // Min 32 bytes for HMAC-SHA256
 
 	// Social Platform OAuth Credentials
-	TwitterClientID     string
-	TwitterClientSecret string
-	YouTubeClientID     string
-	YouTubeClientSecret string
-	InstagramClientID   string
+	TwitterClientID       string
+	TwitterClientSecret   string
+	YouTubeClientID       string
+	YouTubeClientSecret   string
+	InstagramClientID     string
 	InstagramClientSecret string
 }
 
 // LoadConfig reads configuration from environment variables and validates critical constraints.
 func LoadConfig() (*Config, error) {
+	// Load .env file automatically if present
+	loadDotEnv(".env")
+	loadDotEnv("../.env")
+	loadDotEnv("../../.env")
+
 	cfg := &Config{
 		ServerPort:            getEnvAsInt("SERVER_PORT", 8080),
 		ServerHost:            getEnv("SERVER_HOST", "0.0.0.0"),
@@ -129,4 +136,29 @@ func getEnvAsInt(key string, fallback int) int {
 		return fallback
 	}
 	return val
+}
+
+func loadDotEnv(filepath string) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			val = strings.Trim(val, `"'`)
+			if os.Getenv(key) == "" {
+				_ = os.Setenv(key, val)
+			}
+		}
+	}
 }
