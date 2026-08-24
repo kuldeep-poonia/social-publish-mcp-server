@@ -200,19 +200,25 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
-	connectHandler := func(_ context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	connectHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 		platform, _ := args["platform"].(string)
 		if platform != "twitter" {
 			return nil, fmt.Errorf("platform '%s' connection is not supported yet", platform)
 		}
 
-		authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&scope=%s&code_challenge=S256_CHALLENGE&code_challenge_method=S256",
-			twitter.OAuthAuthorizeURL, s.cfg.TwitterClientID, strings.Join(twitter.RequiredScopes, "+"))
+		actor := database.GetActor(ctx)
+		userID := actor.ActorID
+		if userID == "" || userID == "anonymous" {
+			userID = "test_user_1"
+		}
+
+		connectURL := fmt.Sprintf("http://localhost:%d/auth/twitter/connect?user_id=%s", s.cfg.ServerPort, userID)
 
 		payload := map[string]string{
 			"platform":      "twitter",
-			"authorize_url": authURL,
+			"connect_url":   connectURL,
 			"status":        "action_required",
+			"instruction":   "Open connect_url in your web browser to authenticate Twitter and save tokens into vault",
 		}
 		bytes, _ := json.Marshal(payload)
 		return &mcp.CallToolResult{
@@ -444,16 +450,43 @@ func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request
 		callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
 	}
 
-	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
-		twitter.OAuthAuthorizeURL,
-		s.cfg.TwitterClientID,
-		callbackURL,
-		strings.Join(twitter.RequiredScopes, "+"),
-		state,
-		codeChallenge,
-	)
+	params := make(map[string][]string)
+	params["response_type"] = []string{"code"}
+	params["client_id"] = []string{s.cfg.TwitterClientID}
+	params["redirect_uri"] = []string{callbackURL}
+	params["scope"] = []string{strings.Join(twitter.RequiredScopes, " ")}
+	params["state"] = []string{state}
+	params["code_challenge"] = []string{codeChallenge}
+	params["code_challenge_method"] = []string{"S256"}
+
+	values := urlValues(params)
+	authURL := twitter.OAuthAuthorizeURL + "?" + values
 
 	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+func urlValues(m map[string][]string) string {
+	var pairs []string
+	for k, vs := range m {
+		for _, v := range vs {
+			pairs = append(pairs, fmt.Sprintf("%s=%s", strings.TrimSpace(k), strings.ReplaceAll(urlQueryEscape(v), " ", "%20")))
+		}
+	}
+	return strings.Join(pairs, "&")
+}
+
+func urlQueryEscape(s string) string {
+	// Standard percent encoding for OAuth query strings
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~' {
+			buf.WriteByte(c)
+		} else {
+			buf.WriteString(fmt.Sprintf("%%%02X", c))
+		}
+	}
+	return buf.String()
 }
 
 // handleTwitterCallback handles the OAuth 2.0 callback from Twitter.
