@@ -30,6 +30,7 @@ const (
 // RequiredScopes defines minimal required Google scopes for YouTube video publishing & analytics.
 var RequiredScopes = []string{
 	"https://www.googleapis.com/auth/youtube.upload",
+	"https://www.googleapis.com/auth/youtube",
 	"https://www.googleapis.com/auth/youtube.readonly",
 	"https://www.googleapis.com/auth/userinfo.profile",
 }
