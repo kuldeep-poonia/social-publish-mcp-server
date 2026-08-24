@@ -24,7 +24,7 @@ const (
 	QuotaUpdateCost  = 50
 
 	// Resumable Upload Chunk Settings (Google requires multiples of 256 KB)
-	UploadChunkSize = 8 * 1024 * 1024 // 8 MB default chunk
+	UploadChunkSize = 2 * 1024 * 1024 // 2 MB chunk (optimal for WAN stability & granular checkpointing)
 )
 
 // RequiredScopes defines minimal required Google scopes for YouTube video publishing & analytics.

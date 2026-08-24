@@ -33,7 +33,11 @@ func NewClient(clientID, clientSecret string) *Client {
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second, // Adequate for streaming upload chunks
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 20,
+				IdleConnTimeout:     90 * time.Second,
+			},
 		},
 		uploadBase: YouTubeUploadBaseURL,
 		apiBase:    YouTubeAPIBaseURL,
