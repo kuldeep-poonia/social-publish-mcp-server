@@ -130,7 +130,50 @@ flowchart LR
 
 ---
 
-## 4. Connection Pool & Scalability Architecture
+## 4. Resilient Idempotency & Stale Crash Recovery State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> RequestArrived: publish_post(idempotency_key)
+    RequestArrived --> CheckDB: Query posts by idempotency_key
+
+    CheckDB --> ReturnCached: status == 'published'
+    ReturnCached --> [*]: 0 Twitter API calls (is_idempotent_replay: true)
+
+    CheckDB --> InFlightConflict: status == 'processing' & updated_at >= NOW - 60s
+    InFlightConflict --> [*]: 409 Conflict (ErrPostProcessingInProgress)
+
+    CheckDB --> AttemptReclaim: status == 'failed' OR (status == 'processing' & updated_at < NOW - 60s)
+    AttemptReclaim --> ConditionalUpdate: UPDATE posts SET status='processing', updated_at=NOW()
+    ConditionalUpdate --> CheckRowsAffected: Evaluate res.RowsAffected()
+
+    CheckRowsAffected --> LostReclaimRace: RowsAffected == 0
+    LostReclaimRace --> [*]: 409 Conflict
+
+    CheckRowsAffected --> WonReclaimRace: RowsAffected == 1
+    WonReclaimRace --> CallTwitterAPI: Proceed to Twitter v2
+
+    CheckDB --> InsertFreshProcessing: No record found
+    InsertFreshProcessing --> Catch23505: Concurrent race hits UNIQUE index
+    Catch23505 --> [*]: 409 Conflict (Graceful translation)
+
+    InsertFreshProcessing --> CallTwitterAPI: Successfully inserted 'processing'
+    CallTwitterAPI --> TokenRefreshCheck: 401 Unauthorized?
+    TokenRefreshCheck --> RefreshAndRetry: Obtain new token pair from vault
+    RefreshAndRetry --> CallTwitterAPI: Retry once with fresh token
+
+    CallTwitterAPI --> PublishSuccess: 201 Created from Twitter
+    PublishSuccess --> UpdateDBPublished: UPDATE posts SET status='published', platform_post_id=id
+    UpdateDBPublished --> [*]
+
+    CallTwitterAPI --> PublishFailed: 4xx / 5xx error
+    PublishFailed --> UpdateDBFailed: UPDATE posts SET status='failed'
+    UpdateDBFailed --> [*]
+```
+
+---
+
+## 5. Connection Pool & Scalability Architecture
 
 ```mermaid
 graph TD
