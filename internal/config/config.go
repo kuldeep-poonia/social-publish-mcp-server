@@ -40,6 +40,7 @@ type Config struct {
 	TwitterRedirectURI    string
 	YouTubeClientID       string
 	YouTubeClientSecret   string
+	YouTubeRedirectURI    string
 	InstagramClientID     string
 	InstagramClientSecret string
 }
@@ -47,9 +48,7 @@ type Config struct {
 // LoadConfig reads configuration from environment variables and validates critical constraints.
 func LoadConfig() (*Config, error) {
 	// Load .env file automatically if present
-	loadDotEnv(".env")
-	loadDotEnv("../.env")
-	loadDotEnv("../../.env")
+	loadDotEnv(".env", "../.env", "../../.env")
 
 	cfg := &Config{
 		ServerPort:            getEnvAsInt("SERVER_PORT", 8080),
@@ -69,6 +68,7 @@ func LoadConfig() (*Config, error) {
 		TwitterRedirectURI:    getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/auth/twitter/callback"),
 		YouTubeClientID:       getEnv("YOUTUBE_CLIENT_ID", ""),
 		YouTubeClientSecret:   getEnv("YOUTUBE_CLIENT_SECRET", ""),
+		YouTubeRedirectURI:    getEnv("YOUTUBE_REDIRECT_URI", "http://localhost:8080/auth/youtube/callback"),
 		InstagramClientID:     getEnv("INSTAGRAM_CLIENT_ID", ""),
 		InstagramClientSecret: getEnv("INSTAGRAM_CLIENT_SECRET", ""),
 	}

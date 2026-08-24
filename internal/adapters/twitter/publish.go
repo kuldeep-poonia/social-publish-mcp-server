@@ -11,9 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
-	"github.com/kuldeep-poonia/social-publish-mcp-server/pkg/models"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/idempotency"
 )
 
 const (
@@ -49,6 +48,7 @@ type Service struct {
 	db     *sql.DB
 	repo   *database.Repository
 	client *Client
+	engine *idempotency.Engine
 }
 
 // NewService initializes a Twitter publishing service.
@@ -57,6 +57,7 @@ func NewService(db *sql.DB, repo *database.Repository, client *Client) *Service 
 		db:     db,
 		repo:   repo,
 		client: client,
+		engine: idempotency.NewEngine(db, StaleProcessingLockThreshold),
 	}
 }
 
@@ -85,30 +86,33 @@ func (s *Service) PublishTweet(ctx context.Context, req *PublishTweetRequest) (*
 		return nil, err
 	}
 
-	// 3. Acquire Idempotency Lock with Stale Crashed Worker Recovery
-	postRecord, lockAcquired, err := s.acquireIdempotencyLock(ctx, req.UserID, idempotencyKey, req.Content, req.MediaURLs)
+	// 3. Acquire Idempotency Lock via shared Idempotency Engine
+	record, lockStatus, err := s.engine.AcquireLock(ctx, req.UserID, "twitter", idempotencyKey)
+	if err != nil && (lockStatus == idempotency.LockInFlight || errors.Is(err, idempotency.ErrInFlightConflict)) {
+		return nil, ErrPostProcessingInProgress
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	// If already published, return cached result immediately (0 Twitter API calls)
-	if !lockAcquired && (postRecord.Status == "published" || postRecord.Status == "posted") {
+	if lockStatus == idempotency.LockCached {
 		return &PublishTweetResponse{
-			PostID:             postRecord.ID,
-			PlatformPostID:     postRecord.PlatformPostID,
+			PostID:             record.ID,
+			PlatformPostID:     record.PlatformPostID,
 			Status:             "published",
 			IsIdempotentReplay: true,
 		}, nil
 	}
 
-	if !lockAcquired {
+	if lockStatus != idempotency.LockAcquired {
 		return nil, ErrPostProcessingInProgress
 	}
 
 	// 4. Retrieve User's Twitter Connection from Audited Token Vault
 	accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, req.UserID, "twitter")
 	if err != nil {
-		s.markPostFailed(ctx, idempotencyKey)
+		_ = s.engine.MarkFailed(ctx, record.ID, err.Error())
 		if errors.Is(err, database.ErrNotFound) {
 			return nil, ErrPlatformNotConnected
 		}
@@ -125,104 +129,21 @@ func (s *Service) PublishTweet(ctx context.Context, req *PublishTweetRequest) (*
 
 	tweetResp, err := s.postTweetWithTokenRecovery(ctx, req.UserID, accessToken, refreshToken, scopes, tweetCreateReq)
 	if err != nil {
-		s.markPostFailed(ctx, idempotencyKey)
+		_ = s.engine.MarkFailed(ctx, record.ID, err.Error())
 		return nil, fmt.Errorf("twitter api posting failed: %w", err)
 	}
 
-	// 6. Mark post as successfully published
-	if err := s.markPostPublished(ctx, idempotencyKey, tweetResp.Data.ID); err != nil {
+	// 6. Mark post as successfully published via shared engine
+	if err := s.engine.MarkPublished(ctx, record.ID, tweetResp.Data.ID, nil); err != nil {
 		return nil, fmt.Errorf("failed marking post published in database: %w", err)
 	}
 
 	return &PublishTweetResponse{
-		PostID:             postRecord.ID,
+		PostID:             record.ID,
 		PlatformPostID:     tweetResp.Data.ID,
 		Status:             "published",
 		IsIdempotentReplay: false,
 	}, nil
-}
-
-func (s *Service) acquireIdempotencyLock(ctx context.Context, userID, idempotencyKey, content string, mediaURLs []string) (*models.Post, bool, error) {
-	staleCutoff := time.Now().UTC().Add(-StaleProcessingLockThreshold)
-
-	// Step A: Check if row already exists
-	var existing models.Post
-	var mediaArr models.StringArray
-	var platformPostID sql.NullString
-	var scheduledAt, publishedAt sql.NullTime
-
-	query := `SELECT id, user_id, platform, platform_post_id, content, media_urls, status, scheduled_at, published_at, idempotency_key, created_at, updated_at 
-	          FROM posts WHERE idempotency_key = $1`
-
-	err := s.db.QueryRowContext(ctx, query, idempotencyKey).Scan(
-		&existing.ID, &existing.UserID, &existing.Platform, &platformPostID,
-		&existing.Content, &mediaArr, &existing.Status, &scheduledAt, &publishedAt,
-		&existing.IdempotencyKey, &existing.CreatedAt, &existing.UpdatedAt,
-	)
-
-	if err == nil {
-		existing.PlatformPostID = platformPostID.String
-		existing.MediaURLs = []string(mediaArr)
-
-		if existing.Status == "published" || existing.Status == "posted" {
-			return &existing, false, nil
-		}
-
-		if existing.Status == "processing" && existing.UpdatedAt.After(staleCutoff) {
-			// Active in-flight attempt
-			return &existing, false, ErrPostProcessingInProgress
-		}
-
-		// Row is stale processing or failed: attempt atomic conditional reclaim
-		reclaimQuery := `UPDATE posts 
-		                 SET status = 'processing', updated_at = (NOW() AT TIME ZONE 'UTC') 
-		                 WHERE idempotency_key = $1 AND (status = 'failed' OR (status = 'processing' AND updated_at < $2))`
-		res, execErr := s.db.ExecContext(ctx, reclaimQuery, idempotencyKey, staleCutoff)
-		if execErr != nil {
-			return nil, false, fmt.Errorf("failed executing lock reclaim: %w", execErr)
-		}
-
-		rows, _ := res.RowsAffected()
-		if rows == 1 {
-			// Winner of reclaim race
-			return &existing, true, nil
-		}
-
-		// Lost race to concurrent worker
-		return &existing, false, ErrPostProcessingInProgress
-	}
-
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, false, fmt.Errorf("database query error during idempotency check: %w", err)
-	}
-
-	// Step B: No existing row -> Attempt initial INSERT with status='processing'
-	insertQuery := `INSERT INTO posts (user_id, platform, content, media_urls, status, idempotency_key, created_at, updated_at)
-	                VALUES ($1, 'twitter', $2, $3, 'processing', $4, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-	                RETURNING id, created_at, updated_at`
-
-	var newPost models.Post
-	newPost.UserID = userID
-	newPost.Platform = "twitter"
-	newPost.Content = content
-	newPost.MediaURLs = mediaURLs
-	newPost.Status = "processing"
-	newPost.IdempotencyKey = idempotencyKey
-
-	insertErr := s.db.QueryRowContext(ctx, insertQuery, userID, content, models.StringArray(mediaURLs), idempotencyKey).Scan(
-		&newPost.ID, &newPost.CreatedAt, &newPost.UpdatedAt,
-	)
-
-	if insertErr != nil {
-		// Catch PostgreSQL Unique Constraint Violation (SQLSTATE 23505) gracefully
-		var pgErr *pgconn.PgError
-		if errors.As(insertErr, &pgErr) && pgErr.Code == "23505" {
-			return nil, false, ErrPostProcessingInProgress
-		}
-		return nil, false, fmt.Errorf("failed inserting initial idempotency row: %w", insertErr)
-	}
-
-	return &newPost, true, nil
 }
 
 func (s *Service) postTweetWithTokenRecovery(ctx context.Context, userID, accessToken, refreshToken string, scopes []string, req *TweetCreateRequest) (*TweetCreateResponse, error) {
@@ -252,17 +173,3 @@ func (s *Service) postTweetWithTokenRecovery(ctx context.Context, userID, access
 	return nil, err
 }
 
-func (s *Service) markPostPublished(ctx context.Context, idempotencyKey, platformPostID string) error {
-	query := `UPDATE posts 
-	          SET status = 'published', platform_post_id = $1, published_at = (NOW() AT TIME ZONE 'UTC'), updated_at = (NOW() AT TIME ZONE 'UTC')
-	          WHERE idempotency_key = $2`
-	_, err := s.db.ExecContext(ctx, query, platformPostID, idempotencyKey)
-	return err
-}
-
-func (s *Service) markPostFailed(ctx context.Context, idempotencyKey string) {
-	query := `UPDATE posts 
-	          SET status = 'failed', updated_at = (NOW() AT TIME ZONE 'UTC')
-	          WHERE idempotency_key = $1`
-	_, _ = s.db.ExecContext(ctx, query, idempotencyKey)
-}

@@ -9,14 +9,14 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
-func TestLoadMigrations_All6VersionedMigrations(t *testing.T) {
+func TestLoadMigrations_All7VersionedMigrations(t *testing.T) {
 	migrationsDir := filepath.Join("..", "..", "migrations")
 	migrations, err := LoadMigrations(migrationsDir)
 	if err != nil {
 		t.Fatalf("failed to load migrations from %s: %v", migrationsDir, err)
 	}
 
-	expectedVersions := []int{1, 2, 3, 4, 5, 6}
+	expectedVersions := []int{1, 2, 3, 4, 5, 6, 7}
 	if len(migrations) != len(expectedVersions) {
 		t.Fatalf("expected %d migrations, found %d", len(expectedVersions), len(migrations))
 	}

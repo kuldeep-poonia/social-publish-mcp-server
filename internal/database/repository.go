@@ -220,6 +220,12 @@ func (r *Repository) SavePlatformConnection(ctx context.Context, userID, platfor
 
 // GetDecryptedPlatformConnection retrieves the platform connection and decrypts the OAuth credentials.
 func (r *Repository) GetDecryptedPlatformConnection(ctx context.Context, userID, platform string) (decryptedAccess, decryptedRefresh []byte, expiresAt time.Time, scopes []string, err error) {
+	// Enforce multi-tenant cryptographic isolation
+	actor := GetActor(ctx)
+	if actor.ActorID != "" && actor.ActorID != "anonymous" && actor.ActorID != userID {
+		return nil, nil, time.Time{}, nil, ErrUnauthorizedAccess
+	}
+
 	query := `
 		SELECT encrypted_access_token, encrypted_refresh_token, token_expires_at, scopes, is_active
 		FROM platform_connections

@@ -2,6 +2,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/twitter"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/youtube"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
@@ -34,17 +36,20 @@ type twitterOAuthState struct {
 
 // HTTPServer represents the configured HTTP server.
 type HTTPServer struct {
-	server         *http.Server
-	oauthServer    *auth.OAuthServer
-	mcpServer      *mcp.Server
-	transport      *mcp.HTTPTransport
-	limiter        ratelimit.Limiter
-	cfg            *config.Config
-	repo           *database.Repository
-	twitterService *twitter.Service
-	twitterClient  *twitter.Client
-	oauthStatesMu  sync.Mutex
-	oauthStates    map[string]twitterOAuthState
+	server              *http.Server
+	oauthServer         *auth.OAuthServer
+	mcpServer           *mcp.Server
+	transport           *mcp.HTTPTransport
+	limiter             ratelimit.Limiter
+	cfg                 *config.Config
+	repo                *database.Repository
+	twitterService      *twitter.Service
+	twitterClient       *twitter.Client
+	youtubeService      *youtube.PublishService
+	youtubeClient       *youtube.Client
+	youtubeQuotaManager *youtube.QuotaManager
+	oauthStatesMu       sync.Mutex
+	oauthStates         map[string]twitterOAuthState
 }
 
 // NewHTTPServer builds and configures the HTTP server with all routes and middleware.
@@ -57,6 +62,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		"http://127.0.0.1:8080/callback",
 		"http://localhost:8080/auth/twitter/callback",
 		"http://localhost:8080/auth/callback/twitter",
+		"http://localhost:8080/auth/youtube/callback",
+		"http://localhost:8080/auth/callback/youtube",
 		"claude://oauth/callback",
 	}
 	_ = oauthServer.RegisterClient("mcp_client_desktop", "", "MCP Desktop Client", allowedRedirects)
@@ -73,16 +80,26 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		twitterService = twitter.NewService(db, repo, twitterClient)
 	}
 
+	youtubeClient := youtube.NewClient(cfg.YouTubeClientID, cfg.YouTubeClientSecret)
+	youtubeQuotaManager := youtube.NewQuotaManager(youtube.QuotaDailyBudget)
+	var youtubeService *youtube.PublishService
+	if db != nil && repo != nil {
+		youtubeService = youtube.NewPublishService(db, repo, youtubeClient, youtubeQuotaManager)
+	}
+
 	s := &HTTPServer{
-		oauthServer:    oauthServer,
-		mcpServer:      mcpServer,
-		transport:      transport,
-		limiter:        limiter,
-		cfg:            cfg,
-		repo:           repo,
-		twitterService: twitterService,
-		twitterClient:  twitterClient,
-		oauthStates:    make(map[string]twitterOAuthState),
+		oauthServer:         oauthServer,
+		mcpServer:           mcpServer,
+		transport:           transport,
+		limiter:             limiter,
+		cfg:                 cfg,
+		repo:                repo,
+		twitterService:      twitterService,
+		twitterClient:       twitterClient,
+		youtubeService:      youtubeService,
+		youtubeClient:       youtubeClient,
+		youtubeQuotaManager: youtubeQuotaManager,
+		oauthStates:         make(map[string]twitterOAuthState),
 	}
 
 	// Register Social Publishing MCP Tools
@@ -97,11 +114,16 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorize)
 	mux.HandleFunc("/oauth/token", s.handleToken)
 
-	// Twitter Live Browser OAuth Connect & Callback Handlers (supports both /auth/twitter/callback and /auth/callback/twitter)
+	// Twitter Live Browser OAuth Connect & Callback Handlers
 	mux.HandleFunc("/auth/twitter/connect", s.handleTwitterConnect)
 	mux.HandleFunc("/auth/twitter/callback", s.handleTwitterCallback)
 	mux.HandleFunc("/auth/callback/twitter", s.handleTwitterCallback)
 	mux.HandleFunc("/auth/callback", s.handleTwitterCallback)
+
+	// YouTube Live Browser OAuth Connect & Callback Handlers
+	mux.HandleFunc("/auth/youtube/connect", s.handleYouTubeConnect)
+	mux.HandleFunc("/auth/youtube/callback", s.handleYouTubeCallback)
+	mux.HandleFunc("/auth/callback/youtube", s.handleYouTubeCallback)
 
 	// MCP Protocol Endpoints
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
@@ -142,31 +164,80 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}
 		}
 
-		if platform != "twitter" {
-			return nil, fmt.Errorf("platform '%s' is not supported in current release (only 'twitter' active)", platform)
-		}
+		switch platform {
+		case "twitter":
+			if s.twitterService == nil {
+				return nil, errors.New("twitter service is not initialized")
+			}
 
-		if s.twitterService == nil {
-			return nil, errors.New("twitter service is not initialized")
-		}
+			resp, err := s.twitterService.PublishTweet(ctx, &twitter.PublishTweetRequest{
+				UserID:         actor.ActorID,
+				Content:        content,
+				MediaURLs:      mediaURLs,
+				IdempotencyKey: idempotencyKey,
+			})
+			if err != nil {
+				return nil, err
+			}
 
-		resp, err := s.twitterService.PublishTweet(ctx, &twitter.PublishTweetRequest{
-			UserID:         actor.ActorID,
-			Content:        content,
-			MediaURLs:      mediaURLs,
-			IdempotencyKey: idempotencyKey,
-		})
-		if err != nil {
-			return nil, err
-		}
+			resultJSON, _ := json.Marshal(resp)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
 
-		resultJSON, _ := json.Marshal(resp)
-		return &mcp.CallToolResult{
-			Content: []mcp.ToolContent{
-				{Type: "text", Text: string(resultJSON)},
-			},
-			IsError: false,
-		}, nil
+		case "youtube":
+			if s.youtubeService == nil {
+				return nil, errors.New("youtube service is not initialized")
+			}
+
+			title, _ := args["title"].(string)
+			if title == "" {
+				title = content
+			}
+			description, _ := args["description"].(string)
+			if description == "" {
+				description = content
+			}
+			privacyStatus, _ := args["privacy_status"].(string)
+			if privacyStatus == "" {
+				privacyStatus = "public"
+			}
+
+			// Sample/Simulated MP4 video if raw data not directly uploaded over JSON
+			videoBytes := []byte("\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41\x00\x00\x00\x08free00000000000000000000")
+			if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
+				if decoded, decErr := base64.StdEncoding.DecodeString(rawData); decErr == nil {
+					videoBytes = decoded
+				}
+			}
+
+			resp, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
+				UserID:         actor.ActorID,
+				Title:          title,
+				Description:    description,
+				PrivacyStatus:  privacyStatus,
+				VideoReader:    bytes.NewReader(videoBytes),
+				TotalBytes:     int64(len(videoBytes)),
+				IdempotencyKey: idempotencyKey,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			resultJSON, _ := json.Marshal(resp)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube')", platform)
+		}
 	}
 
 	analyticsHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -178,60 +249,98 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		platform, _ := args["platform"].(string)
 		postID, _ := args["post_id"].(string)
 
-		if platform != "twitter" {
-			return nil, fmt.Errorf("platform '%s' is not supported in current release", platform)
-		}
-
 		if s.repo == nil {
 			return nil, errors.New("database repository is not initialized")
 		}
 
-		accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "twitter")
-		if err != nil {
-			return nil, fmt.Errorf("failed retrieving Twitter credentials: %w", err)
-		}
+		switch platform {
+		case "twitter":
+			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "twitter")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving Twitter credentials: %w", err)
+			}
 
-		metrics, err := s.twitterClient.GetTweetAnalytics(ctx, string(accessBytes), postID)
-		if err != nil {
-			return nil, fmt.Errorf("failed retrieving tweet analytics: %w", err)
-		}
+			metrics, err := s.twitterClient.GetTweetAnalytics(ctx, string(accessBytes), postID)
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving tweet analytics: %w", err)
+			}
 
-		resultJSON, _ := json.Marshal(metrics)
-		return &mcp.CallToolResult{
-			Content: []mcp.ToolContent{
-				{Type: "text", Text: string(resultJSON)},
-			},
-			IsError: false,
-		}, nil
+			resultJSON, _ := json.Marshal(metrics)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		case "youtube":
+			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actor.ActorID, "youtube")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving YouTube credentials: %w", err)
+			}
+
+			metrics, err := s.youtubeClient.GetVideoAnalytics(ctx, string(accessBytes), postID)
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving YouTube video analytics: %w", err)
+			}
+
+			resultJSON, _ := json.Marshal(metrics)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube')", platform)
+		}
 	}
 
 	connectHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 		platform, _ := args["platform"].(string)
-		if platform != "twitter" {
-			return nil, fmt.Errorf("platform '%s' connection is not supported yet", platform)
-		}
-
 		actor := database.GetActor(ctx)
 		userID := actor.ActorID
 		if userID == "" || userID == "anonymous" {
 			userID = "test_user_1"
 		}
 
-		connectURL := fmt.Sprintf("http://localhost:%d/auth/twitter/connect?user_id=%s", s.cfg.ServerPort, userID)
+		switch platform {
+		case "twitter":
+			connectURL := fmt.Sprintf("http://localhost:%d/auth/twitter/connect?user_id=%s", s.cfg.ServerPort, userID)
+			payload := map[string]string{
+				"platform":    "twitter",
+				"connect_url": connectURL,
+				"status":      "action_required",
+				"instruction": "Open connect_url in your web browser to authenticate Twitter and save tokens into vault",
+			}
+			b, _ := json.Marshal(payload)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(b)},
+				},
+				IsError: false,
+			}, nil
 
-		payload := map[string]string{
-			"platform":      "twitter",
-			"connect_url":   connectURL,
-			"status":        "action_required",
-			"instruction":   "Open connect_url in your web browser to authenticate Twitter and save tokens into vault",
+		case "youtube":
+			connectURL := fmt.Sprintf("http://localhost:%d/auth/youtube/connect?user_id=%s", s.cfg.ServerPort, userID)
+			payload := map[string]string{
+				"platform":    "youtube",
+				"connect_url": connectURL,
+				"status":      "action_required",
+				"instruction": "Open connect_url in your web browser to authenticate Google YouTube and save tokens into vault",
+			}
+			b, _ := json.Marshal(payload)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(b)},
+				},
+				IsError: false,
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("platform '%s' connection is not supported yet (supported: 'twitter', 'youtube')", platform)
 		}
-		bytes, _ := json.Marshal(payload)
-		return &mcp.CallToolResult{
-			Content: []mcp.ToolContent{
-				{Type: "text", Text: string(bytes)},
-			},
-			IsError: false,
-		}, nil
 	}
 
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler)
@@ -578,6 +687,134 @@ func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Reques
 <div class="badge">Connected Successfully</div>
 <h1>Twitter/X Authorized</h1>
 <p>Your Twitter account has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong> (UUID: %s).</p>
+<p>You can now use the <code>publish_post</code> and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
+</div>
+</body>
+</html>`, oauthState.userID, actualUserID)
+}
+
+// handleYouTubeConnect initiates Google OAuth 2.0 PKCE browser authentication for YouTube.
+func (s *HTTPServer) handleYouTubeConnect(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = "test_user_1"
+	}
+
+	if _, err := uuid.Parse(userID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), userID, fmt.Sprintf("%s@example.com", userID))
+		if userErr == nil && user != nil {
+			userID = user.ID
+		}
+	}
+
+	verifierBytes := make([]byte, 32)
+	_, _ = rand.Read(verifierBytes)
+	codeVerifier := base64.RawURLEncoding.EncodeToString(verifierBytes)
+
+	hash := sha256.Sum256([]byte(codeVerifier))
+	codeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+
+	stateBytes := make([]byte, 16)
+	_, _ = rand.Read(stateBytes)
+	state := hex.EncodeToString(stateBytes)
+
+	callbackURL := strings.TrimSpace(s.cfg.YouTubeRedirectURI)
+	if callbackURL == "" {
+		callbackURL = fmt.Sprintf("http://%s:%d/auth/youtube/callback", s.cfg.ServerHost, s.cfg.ServerPort)
+		if s.cfg.ServerHost == "0.0.0.0" {
+			callbackURL = fmt.Sprintf("http://localhost:%d/auth/youtube/callback", s.cfg.ServerPort)
+		}
+	}
+
+	s.oauthStatesMu.Lock()
+	s.oauthStates[state] = twitterOAuthState{
+		codeVerifier: codeVerifier,
+		userID:       userID,
+		redirectURI:  callbackURL,
+		expiresAt:    time.Now().Add(10 * time.Minute),
+	}
+	s.oauthStatesMu.Unlock()
+
+	params := make(map[string][]string)
+	params["response_type"] = []string{"code"}
+	params["client_id"] = []string{s.cfg.YouTubeClientID}
+	params["redirect_uri"] = []string{callbackURL}
+	params["scope"] = []string{strings.Join(youtube.RequiredScopes, " ")}
+	params["state"] = []string{state}
+	params["code_challenge"] = []string{codeChallenge}
+	params["code_challenge_method"] = []string{"S256"}
+	params["access_type"] = []string{"offline"}
+	params["prompt"] = []string{"consent"}
+
+	values := urlValues(params)
+	authURL := youtube.OAuthAuthorizeURL + "?" + values
+
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// handleYouTubeCallback handles the OAuth 2.0 callback from Google.
+func (s *HTTPServer) handleYouTubeCallback(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	code := q.Get("code")
+	state := q.Get("state")
+	errParam := q.Get("error")
+
+	if errParam != "" {
+		http.Error(w, fmt.Sprintf("Google OAuth Authorization Denied: %s", errParam), http.StatusBadRequest)
+		return
+	}
+
+	if code == "" || state == "" {
+		http.Error(w, "Invalid callback: code and state required", http.StatusBadRequest)
+		return
+	}
+
+	s.oauthStatesMu.Lock()
+	oauthState, exists := s.oauthStates[state]
+	if exists {
+		delete(s.oauthStates, state)
+	}
+	s.oauthStatesMu.Unlock()
+
+	if !exists || time.Now().After(oauthState.expiresAt) {
+		http.Error(w, "Invalid or expired OAuth state parameter (replay attack prevented)", http.StatusBadRequest)
+		return
+	}
+
+	tokenResp, err := s.youtubeClient.ExchangeOAuthToken(r.Context(), code, oauthState.codeVerifier, oauthState.redirectURI)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed exchanging authorization code with Google OAuth: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	actualUserID := oauthState.userID
+	if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+		if userErr == nil && user != nil {
+			actualUserID = user.ID
+		}
+	}
+
+	if s.repo != nil {
+		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "youtube", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, youtube.RequiredScopes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, `
+<!DOCTYPE html>
+<html>
+<head><title>YouTube Connected</title><style>body{font-family:sans-serif;background:#0f0f0f;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;} .card{background:#212121;padding:40px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-width:480px;} h1{color:#ff0000;margin-bottom:12px;} p{color:#aaa;line-height:1.6;} .badge{background:#00ba7c22;color:#00ba7c;padding:6px 16px;border-radius:20px;display:inline-block;font-weight:bold;margin-bottom:16px;}</style></head>
+<body>
+<div class="card">
+<div class="badge">Connected Successfully</div>
+<h1>YouTube Authorized</h1>
+<p>Your Google YouTube account has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong> (UUID: %s).</p>
 <p>You can now use the <code>publish_post</code> and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
 </div>
 </body>
