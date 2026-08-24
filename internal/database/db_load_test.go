@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/crypto"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -96,6 +94,29 @@ func TestSessionCreation_RealDatabaseLoadConcurrency(t *testing.T) {
 			var wg sync.WaitGroup
 			startOverall := time.Now()
 
+			// Active real-time connection pool sampler
+			var peakOpen int64
+			var peakInUse int64
+			stopSampling := make(chan struct{})
+			go func() {
+				ticker := time.NewTicker(2 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-stopSampling:
+						return
+					case <-ticker.C:
+						st := db.Stats()
+						if int64(st.OpenConnections) > atomic.LoadInt64(&peakOpen) {
+							atomic.StoreInt64(&peakOpen, int64(st.OpenConnections))
+						}
+						if int64(st.InUse) > atomic.LoadInt64(&peakInUse) {
+							atomic.StoreInt64(&peakInUse, int64(st.InUse))
+						}
+					}
+				}
+			}()
+
 			for i := 0; i < sc.totalRequests; i++ {
 				<-ticker.C
 				wg.Add(1)
@@ -104,26 +125,23 @@ func TestSessionCreation_RealDatabaseLoadConcurrency(t *testing.T) {
 					defer wg.Done()
 					opStart := time.Now()
 
-					// Real Token Generation + Real DB Persistence
-					tokenHash := auth.HashRefreshToken(uuid.New().String() + uuid.New().String())
-					expiresAt := time.Now().UTC().Add(7 * 24 * time.Hour)
+					// Real database write: store session + audit log
+					sessionHash := fmt.Sprintf("db_load_hash_%d_%d", idx, time.Now().UnixNano())
+					expiresAt := time.Now().UTC().Add(30 * 24 * time.Hour)
 
-					reqCtx, reqCancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer reqCancel()
-
-					// Real Postgres INSERT INTO user_sessions + Real Audit Log INSERT
-					err := repo.StoreUserSession(reqCtx, tokenHash, user.ID, expiresAt)
-					duration := time.Since(opStart)
-
-					latenciesMs[idx] = float64(duration.Nanoseconds()) / 1_000_000.0
-
+					err := repo.StoreUserSession(ctx, sessionHash, user.ID, expiresAt)
 					if err != nil {
 						atomic.AddInt64(&errorCount, 1)
+						return
 					}
+
+					duration := time.Since(opStart)
+					latenciesMs[idx] = float64(duration.Nanoseconds()) / 1_000_000.0
 				}(i)
 			}
 
 			wg.Wait()
+			close(stopSampling)
 			totalElapsed := time.Since(startOverall)
 
 			sortedLatencies := make([]float64, len(latenciesMs))
@@ -144,8 +162,8 @@ func TestSessionCreation_RealDatabaseLoadConcurrency(t *testing.T) {
 
 			t.Logf("[%s] Target: %d RPS | Total Req: %d | Actual RPS: %.1f | Elapsed: %v",
 				sc.name, sc.targetRateRPS, sc.totalRequests, actualRPS, totalElapsed)
-			t.Logf("[%s] Errors: %d (%.2f%%) | DB Pool InUse: %d | OpenConns: %d | WaitCount: %d | WaitDuration: %v",
-				sc.name, errorCount, errorRate, stats.InUse, stats.OpenConnections, stats.WaitCount, stats.WaitDuration)
+			t.Logf("[%s] Errors: %d (%.2f%%) | MaxOpenAllowed: %d | PeakOpenInFlight: %d | PeakInUseInFlight: %d | IdlePostTest: %d | TotalWaits: %d | WaitDuration: %v",
+				sc.name, errorCount, errorRate, stats.MaxOpenConnections, atomic.LoadInt64(&peakOpen), atomic.LoadInt64(&peakInUse), stats.Idle, stats.WaitCount, stats.WaitDuration)
 			t.Logf("[%s] Real DB Latency -> min: %.3fms | p50: %.3fms | p90: %.3fms | p95: %.3fms | p99: %.3fms | max: %.3fms",
 				sc.name, minLat, p50, p90, p95, p99, maxLat)
 

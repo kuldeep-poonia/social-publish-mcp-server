@@ -84,8 +84,10 @@ func TestOAuthHandshake_RealDatabaseSteppedConcurrencyLoad(t *testing.T) {
 	_ = oauthServer.RegisterClient(clientID, "secret", "Real DB Client", []string{redirectURI})
 
 	// 4. Create base user
-	testEmail := fmt.Sprintf("oauth_db_user_%d@example.com", time.Now().UnixNano())
-	user, err := repo.CreateUser(ctx, testEmail, "oauth_db_user")
+	uniqueID := time.Now().UnixNano()
+	testEmail := fmt.Sprintf("oauth_db_user_%d@example.com", uniqueID)
+	testUsername := fmt.Sprintf("oauth_user_%d", uniqueID)
+	user, err := repo.CreateUser(ctx, testEmail, testUsername)
 	if err != nil {
 		t.Fatalf("failed creating test user: %v", err)
 	}
@@ -118,6 +120,29 @@ func TestOAuthHandshake_RealDatabaseSteppedConcurrencyLoad(t *testing.T) {
 
 			var wg sync.WaitGroup
 			startOverall := time.Now()
+
+			// Active real-time connection pool sampler
+			var peakOpen int64
+			var peakInUse int64
+			stopSampling := make(chan struct{})
+			go func() {
+				ticker := time.NewTicker(2 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-stopSampling:
+						return
+					case <-ticker.C:
+						st := db.Stats()
+						if int64(st.OpenConnections) > atomic.LoadInt64(&peakOpen) {
+							atomic.StoreInt64(&peakOpen, int64(st.OpenConnections))
+						}
+						if int64(st.InUse) > atomic.LoadInt64(&peakInUse) {
+							atomic.StoreInt64(&peakInUse, int64(st.InUse))
+						}
+					}
+				}
+			}()
 
 			for i := 0; i < sc.totalRequests; i++ {
 				<-ticker.C
@@ -171,6 +196,7 @@ func TestOAuthHandshake_RealDatabaseSteppedConcurrencyLoad(t *testing.T) {
 			}
 
 			wg.Wait()
+			close(stopSampling)
 			totalElapsed := time.Since(startOverall)
 
 			sortedLatencies := make([]float64, len(latenciesMs))
@@ -191,8 +217,8 @@ func TestOAuthHandshake_RealDatabaseSteppedConcurrencyLoad(t *testing.T) {
 
 			t.Logf("[%s] Target: %d RPS | Total Req: %d | Actual RPS: %.1f | Elapsed: %v",
 				sc.name, sc.targetRateRPS, sc.totalRequests, actualRPS, totalElapsed)
-			t.Logf("[%s] Errors: %d (%.2f%%) | DB Pool InUse: %d | OpenConns: %d | WaitCount: %d | WaitDuration: %v",
-				sc.name, errorCount, errorRate, stats.InUse, stats.OpenConnections, stats.WaitCount, stats.WaitDuration)
+			t.Logf("[%s] Errors: %d (%.2f%%) | MaxOpenAllowed: %d | PeakOpenInFlight: %d | PeakInUseInFlight: %d | IdlePostTest: %d | TotalWaits: %d | WaitDuration: %v",
+				sc.name, errorCount, errorRate, stats.MaxOpenConnections, atomic.LoadInt64(&peakOpen), atomic.LoadInt64(&peakInUse), stats.Idle, stats.WaitCount, stats.WaitDuration)
 			t.Logf("[%s] Real DB Handshake Latency -> min: %.3fms | p50: %.3fms | p90: %.3fms | p95: %.3fms | p99: %.3fms | max: %.3fms",
 				sc.name, minLat, p50, p90, p95, p99, maxLat)
 
