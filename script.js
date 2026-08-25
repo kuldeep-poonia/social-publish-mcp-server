@@ -1,194 +1,184 @@
 /**
- * Social Publishing MCP Server — Interactive Landing Page Scripts
+ * Social Publishing MCP Server — Apple-Grade Interactive Client Scripts
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Toast Helper
+  // Toast Notification Controller
   const toast = document.getElementById('toast');
-  function showToast(message = 'Copied to clipboard!') {
+  function showToast(message = 'Copied to clipboard') {
+    if (!toast) return;
     toast.textContent = message;
     toast.classList.add('show');
     setTimeout(() => {
       toast.classList.remove('show');
-    }, 2400);
+    }, 2200);
   }
 
-  // Copy to Clipboard generic helper
-  function copyTextToClipboard(text) {
+  // Universal Clipboard Copy
+  function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => showToast());
     } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
       document.execCommand('copy');
-      document.body.removeChild(textarea);
+      document.body.removeChild(el);
       showToast();
     }
   }
 
-  // 1. Copy Claude Configuration
-  const copyConfigBtn = document.getElementById('copy-claude-config');
-  if (copyConfigBtn) {
-    copyConfigBtn.addEventListener('click', () => {
-      const configText = `{\n  "mcpServers": {\n    "social-publisher": {\n      "command": "docker",\n      "args": ["exec", "-i", "social_mcp_app", "/app/social-mcp-server"]\n    }\n  }\n}`;
-      copyTextToClipboard(configText);
-    });
+  // 1. Copy Claude Config Buttons
+  const copyConfigTop = document.getElementById('copy-config-btn-top');
+  const claudeConfigSnippet = `{\n  "mcpServers": {\n    "social-publisher": {\n      "command": "docker",\n      "args": ["exec", "-i", "social_mcp_app", "/app/social-mcp-server"]\n    }\n  }\n}`;
+
+  if (copyConfigTop) {
+    copyConfigTop.addEventListener('click', () => copyText(claudeConfigSnippet));
   }
 
-  // 2. Interactive Tool Schema Switcher
-  const toolSchemas = {
+  // 2. Interactive Tool Schema Studio
+  const toolDefinitions = {
     publish: {
-      title: 'Tool Schema: publish_post',
-      code: `// publish_post JSON-RPC 2.0 Schema\n{\n  "name": "publish_post",\n  "description": "Publishes text updates, photo attachments, or video content to Twitter/X, YouTube, or Instagram.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform", "content"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] },\n      "content": { "type": "string", "description": "Text caption or description" },\n      "media_urls": { "type": "array", "items": { "type": "string" }, "description": "Public media URLs to attach" },\n      "title": { "type": "string", "description": "Required for YouTube video uploads" },\n      "visibility": { "type": "string", "enum": ["public", "unlisted", "private"], "default": "public" },\n      "media_type": { "type": "string", "enum": ["IMAGE", "VIDEO", "REEL", "CAROUSEL"] }\n    }\n  }\n}`
+      title: 'publish_post.json',
+      code: `// publish_post JSON-RPC 2.0 Protocol Schema\n{\n  "name": "publish_post",\n  "description": "Publishes text updates, photo attachments, or video content to Twitter/X, YouTube, or Instagram.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform", "content"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] },\n      "content": { "type": "string", "description": "Text caption or description" },\n      "media_urls": { "type": "array", "items": { "type": "string" }, "description": "Public media URLs to attach" },\n      "title": { "type": "string", "description": "Required for YouTube video uploads" },\n      "visibility": { "type": "string", "enum": ["public", "unlisted", "private"], "default": "public" },\n      "media_type": { "type": "string", "enum": ["IMAGE", "VIDEO", "REEL", "CAROUSEL"] }\n    }\n  }\n}`
     },
     analytics: {
-      title: 'Tool Schema: get_post_analytics',
-      code: `// get_post_analytics JSON-RPC 2.0 Schema\n{\n  "name": "get_post_analytics",\n  "description": "Retrieves real-time and historical engagement telemetry for a published post.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform", "post_id"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] },\n      "post_id": { "type": "string", "description": "Upstream platform post/video/reel identifier" }\n    }\n  }\n}`
+      title: 'get_post_analytics.json',
+      code: `// get_post_analytics JSON-RPC 2.0 Protocol Schema\n{\n  "name": "get_post_analytics",\n  "description": "Retrieves real-time and historical engagement telemetry for a published post.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform", "post_id"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] },\n      "post_id": { "type": "string", "description": "Upstream platform post/video/reel identifier" }\n    }\n  }\n}`
     },
     list: {
-      title: 'Tool Schema: list_connections',
-      code: `// list_connections JSON-RPC 2.0 Schema\n{\n  "name": "list_connections",\n  "description": "Returns all active authenticated social network connections for the requesting user.",\n  "parameters": {\n    "type": "object",\n    "properties": {}\n  }\n}`
+      title: 'list_connections.json',
+      code: `// list_connections JSON-RPC 2.0 Protocol Schema\n{\n  "name": "list_connections",\n  "description": "Returns all active authenticated social network connections for the requesting user.",\n  "parameters": {\n    "type": "object",\n    "properties": {}\n  }\n}`
     },
     disconnect: {
-      title: 'Tool Schema: disconnect_platform',
-      code: `// disconnect_platform JSON-RPC 2.0 Schema\n{\n  "name": "disconnect_platform",\n  "description": "Revokes upstream platform authorization tokens and deletes credentials from the encrypted vault.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] }\n    }\n  }\n}`
+      title: 'disconnect_platform.json',
+      code: `// disconnect_platform JSON-RPC 2.0 Protocol Schema\n{\n  "name": "disconnect_platform",\n  "description": "Revokes upstream platform authorization tokens and deletes credentials from the encrypted vault.",\n  "parameters": {\n    "type": "object",\n    "required": ["platform"],\n    "properties": {\n      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] }\n    }\n  }\n}`
     }
   };
 
-  const toolTabBtns = document.querySelectorAll('.tool-tab-btn');
-  const toolNameDisplay = document.getElementById('tool-name-display');
-  const toolCodeContent = document.getElementById('tool-code-content');
-  const copyToolSchemaBtn = document.getElementById('copy-tool-schema');
+  const toolNavBtns = document.querySelectorAll('.tool-nav-btn');
+  const toolTitleDisplay = document.getElementById('tool-title-display');
+  const toolCodeViewContent = document.getElementById('tool-code-view-content');
+  const copySchemaBtn = document.getElementById('copy-schema-btn');
 
-  toolTabBtns.forEach((btn) => {
+  toolNavBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
-      toolTabBtns.forEach((b) => b.classList.remove('active'));
+      toolNavBtns.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
 
       const toolKey = btn.getAttribute('data-tool');
-      if (toolSchemas[toolKey]) {
-        toolNameDisplay.innerHTML = `<i class="fa-solid fa-code"></i> ${toolSchemas[toolKey].title}`;
-        toolCodeContent.textContent = toolSchemas[toolKey].code;
+      if (toolDefinitions[toolKey]) {
+        toolTitleDisplay.textContent = toolDefinitions[toolKey].title;
+        toolCodeViewContent.textContent = toolDefinitions[toolKey].code;
       }
     });
   });
 
-  if (copyToolSchemaBtn) {
-    copyToolSchemaBtn.addEventListener('click', () => {
-      copyTextToClipboard(toolCodeContent.textContent);
+  if (copySchemaBtn) {
+    copySchemaBtn.addEventListener('click', () => {
+      copyText(toolCodeViewContent.textContent);
     });
   }
 
-  // 3. Interactive Terminal Simulator
-  const terminalBody = document.getElementById('terminal-body');
-  const simBtns = document.querySelectorAll('.sim-btn');
+  // 3. Studio Interactive Simulator Scenarios
+  const terminalStream = document.getElementById('terminal-stream');
+  const dockPills = document.querySelectorAll('.dock-pill');
 
-  const simulationScenarios = {
-    twitter: {
-      userPrompt: 'Publish our new video announcement to Twitter with image attachment: <code>https://cdn.example.com/teaser.png</code>',
-      toolHtml: `
-        <div class="mcp-tool-call">
-          <div class="tool-call-header">
-            <span class="tool-badge"><i class="fa-brands fa-x-twitter"></i> publish_post</span>
-            <span class="tool-timer"><i class="fa-solid fa-bolt"></i> 14ms (Direct Dispatch)</span>
+  const studioScenarios = {
+    combo: {
+      userText: 'Upload our 120MB announcement video to YouTube with title "Autonomous Go Architecture", and cross-post a teaser to Twitter with media.',
+      aiHtml: `
+        <p class="ai-text">Executing coordinated publish across YouTube and Twitter/X via Social MCP Gateway:</p>
+        <div class="studio-event-card">
+          <div class="event-header">
+            <span class="event-badge yt"><i class="fa-brands fa-youtube"></i> publish_post</span>
+            <span class="event-time">8MB Resumable Chunk Stream</span>
           </div>
-          <div class="tool-json">
-            <code>{"platform": "twitter", "content": "Autonomous Go Microservices live now! 🚀", "media_urls": ["https://cdn.example.com/teaser.png"]}</code>
+          <div class="event-payload">
+            <code>{"platform": "youtube", "title": "Autonomous Go Architecture", "visibility": "public"}</code>
           </div>
-          <div class="tool-response success">
-            <i class="fa-solid fa-circle-check"></i> Published Tweet ID: <strong>1894726190283741184</strong> • Idempotency Lock: <strong>ACQUIRED</strong>
+          <div class="stream-progress-track">
+            <div class="stream-progress-bar" style="width: 100%;"></div>
           </div>
-        </div>
-        Your tweet is published live with the verified image attachment!
-      `
-    },
-    youtube: {
-      userPrompt: 'Upload this 120MB video to YouTube with title "Building Autonomous Go Agents", visibility public: <code>https://cdn.example.com/tutorial.mp4</code>',
-      toolHtml: `
-        <div class="mcp-tool-call">
-          <div class="tool-call-header">
-            <span class="tool-badge yt"><i class="fa-brands fa-youtube"></i> publish_post</span>
-            <span class="tool-timer"><i class="fa-solid fa-arrows-rotate"></i> 8MB Resumable Chunk Stream</span>
-          </div>
-          <div class="tool-json">
-            <code>{"platform": "youtube", "title": "Building Autonomous Go Agents", "visibility": "public", "media_type": "VIDEO"}</code>
-          </div>
-          <div class="upload-progress-bar">
-            <div class="progress-fill" style="width: 100%;"></div>
-          </div>
-          <div class="tool-response success">
-            <i class="fa-solid fa-circle-check"></i> Uploaded Video ID: <strong>yt_v927401a8</strong> • Memory Delta: <strong>&lt; 0.8 MB</strong> • Daily Quota: <strong>1,600 / 10,000</strong>
+          <div class="event-meta success">
+            <i class="fa-solid fa-check"></i> Uploaded Video ID: <strong>yt_v90281a</strong> (Quota Reserved: 1,600 / 10,000)
           </div>
         </div>
-        Video uploaded cleanly using Google Resumable Chunk Protocol!
+
+        <div class="studio-event-card">
+          <div class="event-header">
+            <span class="event-badge x"><i class="fa-brands fa-x-twitter"></i> publish_post</span>
+            <span class="event-time">14ms Direct Dispatch</span>
+          </div>
+          <div class="event-payload">
+            <code>{"platform": "twitter", "content": "Autonomous Go Architecture is live now! 🚀"}</code>
+          </div>
+          <div class="event-meta success">
+            <i class="fa-solid fa-check"></i> Published Tweet ID: <strong>1894726190283741184</strong> (Idempotency Lock: ACQUIRED)
+          </div>
+        </div>
       `
     },
     instagram: {
-      userPrompt: 'Post this photo to my Instagram Feed with caption "Behind the scenes at our summit! 📸✨" from <code>https://cdn.example.com/banner.png</code>',
-      toolHtml: `
-        <div class="mcp-tool-call">
-          <div class="tool-call-header">
-            <span class="tool-badge" style="background: rgba(236, 72, 153, 0.2); color: #f472b6;"><i class="fa-brands fa-instagram"></i> publish_post</span>
-            <span class="tool-timer"><i class="fa-solid fa-gear"></i> PNG-to-JPEG Transcoded</span>
+      userText: 'Publish this Reel to my Instagram account with caption "Autonomous AI Agents in Production ✨" from <code>https://cdn.example.com/reel_01.mp4</code>',
+      aiHtml: `
+        <p class="ai-text">Processing Instagram container lifecycle via Meta Graph API v20.0:</p>
+        <div class="studio-event-card">
+          <div class="event-header">
+            <span class="event-badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899;"><i class="fa-brands fa-instagram"></i> publish_post</span>
+            <span class="event-time">Container State Polling</span>
           </div>
-          <div class="tool-json">
-            <code>{"platform": "instagram", "content": "Behind the scenes at our summit! 📸✨", "media_urls": ["https://cdn.example.com/banner.png"], "media_type": "IMAGE"}</code>
+          <div class="event-payload">
+            <code>{"platform": "instagram", "content": "Autonomous AI Agents in Production ✨", "media_type": "REEL"}</code>
           </div>
-          <div class="tool-response success">
-            <i class="fa-solid fa-circle-check"></i> Container ID: <strong>179948291048</strong> • Published Instagram Media ID: <strong>1789502948201</strong>
+          <div class="event-meta success">
+            <i class="fa-solid fa-check"></i> Container Created: <strong>179948291048</strong> • Published Reel ID: <strong>1789502948201</strong>
           </div>
         </div>
-        Instagram container processed and feed image published successfully!
       `
     },
     analytics: {
-      userPrompt: 'Fetch the real-time engagement telemetry and impressions for my latest Instagram post ID 1789502948201.',
-      toolHtml: `
-        <div class="mcp-tool-call">
-          <div class="tool-call-header">
-            <span class="tool-badge" style="background: rgba(6, 182, 212, 0.2); color: #67e8f9;"><i class="fa-solid fa-chart-line"></i> get_post_analytics</span>
-            <span class="tool-timer"><i class="fa-solid fa-clock"></i> Live Graph API Sync</span>
+      userText: 'Fetch the real-time engagement telemetry for our published Instagram post ID 1789502948201.',
+      aiHtml: `
+        <p class="ai-text">Aggregating live metric telemetry from Meta Graph API:</p>
+        <div class="studio-event-card">
+          <div class="event-header">
+            <span class="event-badge" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4;"><i class="fa-solid fa-chart-line"></i> get_post_analytics</span>
+            <span class="event-time">Graph API Sync</span>
           </div>
-          <div class="tool-json">
+          <div class="event-payload">
             <code>{"platform": "instagram", "post_id": "1789502948201"}</code>
           </div>
-          <div class="tool-response success">
-            <i class="fa-solid fa-circle-check"></i> Impressions: <strong>14,250</strong> • Reach: <strong>11,890</strong> • Likes: <strong>842</strong> • Comments: <strong>67</strong> • Shares: <strong>128</strong> • Saves: <strong>94</strong>
+          <div class="event-meta success">
+            <i class="fa-solid fa-check"></i> Impressions: <strong>14,250</strong> • Reach: <strong>11,890</strong> • Likes: <strong>842</strong> • Shares: <strong>128</strong>
           </div>
         </div>
-        Here is your engagement report: Post reach is currently pacing 24% higher than your average!
       `
     }
   };
 
-  simBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      simBtns.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
+  dockPills.forEach((pill) => {
+    pill.addEventListener('click', () => {
+      dockPills.forEach((p) => p.classList.remove('active'));
+      pill.classList.add('active');
 
-      const action = btn.getAttribute('data-action');
-      const scenario = simulationScenarios[action];
+      const action = pill.getAttribute('data-action');
+      const scenario = studioScenarios[action];
       if (!scenario) return;
 
-      terminalBody.innerHTML = `
-        <div class="chat-message user-msg">
-          <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
-          <div class="msg-content">
-            <div class="msg-header">You</div>
-            <div class="msg-bubble">${scenario.userPrompt}</div>
+      terminalStream.innerHTML = `
+        <div class="chat-bubble-row user-row">
+          <div class="avatar-pill user-avatar">User</div>
+          <div class="bubble-glass user-bubble">
+            ${scenario.userText}
           </div>
         </div>
 
-        <div class="chat-message ai-msg">
-          <div class="msg-avatar"><i class="fa-solid fa-sparkles"></i></div>
-          <div class="msg-content">
-            <div class="msg-header">Claude (via Social MCP Gateway)</div>
-            <div class="msg-bubble">
-              I'm executing this action through the Social Publishing MCP Server.
-              ${scenario.toolHtml}
-            </div>
+        <div class="chat-bubble-row ai-row">
+          <div class="avatar-pill ai-avatar">Claude</div>
+          <div class="bubble-glass ai-bubble">
+            ${scenario.aiHtml}
           </div>
         </div>
       `;
