@@ -36,6 +36,7 @@ type Config struct {
 	TokenEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM (OAuth Vault)
 	QueueEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM (Queue Payload Security)
 	JWTSigningSecret   []byte // Min 32 bytes for HMAC-SHA256
+	MetricsBearerToken string // Static Bearer token required for scraping /metrics
 
 	// Queue & Reliability Engine
 	QueueMaxRetries          int  // Maximum retry attempts for transient errors (default: 5)
@@ -139,6 +140,18 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("JWT_SIGNING_SECRET must be at least 32 characters long for secure HMAC-SHA256, got %d", len(jwtSecret))
 	}
 	cfg.JWTSigningSecret = []byte(jwtSecret)
+
+	// Configure Metrics Bearer Token for Prometheus scraping
+	metricsToken := os.Getenv("METRICS_BEARER_TOKEN")
+	if metricsToken == "" {
+		if cfg.Environment == "development" {
+			metricsToken = "local_dev_metrics_token_prometheus_12345"
+		} else {
+			// In production, derive deterministic secure bearer token from JWT secret if not explicitly provided
+			metricsToken = hex.EncodeToString(deriveQueueKey(cfg.JWTSigningSecret))[:32]
+		}
+	}
+	cfg.MetricsBearerToken = metricsToken
 
 	return cfg, nil
 }
