@@ -190,3 +190,57 @@ func TestServer_RateLimitingMiddleware_429Enforcement(t *testing.T) {
 		t.Fatal("expected requests exceeding burst capacity to receive 429 Too Many Requests")
 	}
 }
+
+func TestServer_InstagramRoutesAndTools(t *testing.T) {
+	signingSecret := []byte("a-very-secure-jwt-signing-secret-minimum-32-chars-long")
+	cfg := &config.Config{
+		ServerHost:             "127.0.0.1",
+		ServerPort:             8080,
+		JWTSigningSecret:       signingSecret,
+		TokenEncryptionKey:     make([]byte, 32),
+		InstagramClientID:      "meta_client_12345",
+		InstagramClientSecret:  "meta_sec_67890",
+		InstagramWebhookSecret: "webhook_verify_sec_xyz",
+	}
+
+	httpServer := NewHTTPServer(cfg, nil, nil)
+	ts := httptest.NewServer(httpServer.server.Handler)
+	defer ts.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// 1. Instagram Connect Endpoint (Redirects to Meta OAuth)
+	connectResp, err := client.Get(ts.URL + "/auth/instagram/connect?user_id=test_user_ig")
+	if err != nil {
+		t.Fatalf("GET /auth/instagram/connect failed: %v", err)
+	}
+	if connectResp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302 Found on /auth/instagram/connect, got %d", connectResp.StatusCode)
+	}
+	loc := connectResp.Header.Get("Location")
+	if loc == "" || !bytes.Contains([]byte(loc), []byte("facebook.com")) {
+		t.Errorf("unexpected redirect location: %s", loc)
+	}
+	connectResp.Body.Close()
+
+	// 2. Instagram Webhook Challenge Verification (GET)
+	challengeURL := fmt.Sprintf("%s/webhooks/instagram?hub.mode=subscribe&hub.verify_token=%s&hub.challenge=test_challenge_12345",
+		ts.URL, cfg.InstagramWebhookSecret)
+	whResp, err := http.Get(challengeURL)
+	if err != nil {
+		t.Fatalf("webhook challenge request failed: %v", err)
+	}
+	if whResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on webhook challenge, got %d", whResp.StatusCode)
+	}
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(whResp.Body)
+	if buf.String() != "test_challenge_12345" {
+		t.Errorf("expected echoed challenge 'test_challenge_12345', got '%s'", buf.String())
+	}
+	whResp.Body.Close()
+}

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/instagram"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/twitter"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/youtube"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
@@ -49,6 +51,9 @@ type HTTPServer struct {
 	youtubeService      *youtube.PublishService
 	youtubeClient       *youtube.Client
 	youtubeQuotaManager *youtube.QuotaManager
+	instagramService    *instagram.Service
+	instagramClient     *instagram.Client
+	mediaStager         *instagram.MediaStager
 	oauthStatesMu       sync.Mutex
 	oauthStates         map[string]twitterOAuthState
 }
@@ -65,6 +70,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		"http://localhost:8080/auth/callback/twitter",
 		"http://localhost:8080/auth/youtube/callback",
 		"http://localhost:8080/auth/callback/youtube",
+		"http://localhost:8080/auth/instagram/callback",
+		"http://localhost:8080/auth/callback/instagram",
 		"claude://oauth/callback",
 	}
 	_ = oauthServer.RegisterClient("mcp_client_desktop", "", "MCP Desktop Client", allowedRedirects)
@@ -88,6 +95,13 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		youtubeService = youtube.NewPublishService(db, repo, youtubeClient, youtubeQuotaManager)
 	}
 
+	instagramClient := instagram.NewClient(cfg.InstagramClientID, cfg.InstagramClientSecret)
+	mediaStager, _ := instagram.NewMediaStager("", cfg.PublicBaseURL)
+	var instagramService *instagram.Service
+	if db != nil && repo != nil {
+		instagramService = instagram.NewService(db, repo, instagramClient, mediaStager)
+	}
+
 	s := &HTTPServer{
 		oauthServer:         oauthServer,
 		mcpServer:           mcpServer,
@@ -100,6 +114,9 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		youtubeService:      youtubeService,
 		youtubeClient:       youtubeClient,
 		youtubeQuotaManager: youtubeQuotaManager,
+		instagramService:    instagramService,
+		instagramClient:     instagramClient,
+		mediaStager:         mediaStager,
 		oauthStates:         make(map[string]twitterOAuthState),
 	}
 
@@ -125,6 +142,19 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/auth/youtube/connect", s.handleYouTubeConnect)
 	mux.HandleFunc("/auth/youtube/callback", s.handleYouTubeCallback)
 	mux.HandleFunc("/auth/callback/youtube", s.handleYouTubeCallback)
+
+	// Instagram Live Browser OAuth Connect & Callback Handlers
+	mux.HandleFunc("/auth/instagram/connect", s.handleInstagramConnect)
+	mux.HandleFunc("/auth/instagram/callback", s.handleInstagramCallback)
+	mux.HandleFunc("/auth/callback/instagram", s.handleInstagramCallback)
+
+	// Ephemeral Media Server for Meta Crawler (Protected with exact-match token & nosniff)
+	if mediaStager != nil {
+		mux.HandleFunc("/media/ephemeral/", mediaStager.ServeHTTP)
+	}
+
+	// Meta Webhook Endpoint (HMAC-SHA256 signature verified)
+	mux.HandleFunc("/webhooks/instagram", s.handleInstagramWebhook)
 
 	// MCP Protocol Endpoints
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
@@ -271,8 +301,50 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IsError: false,
 			}, nil
 
+		case "instagram":
+			if s.instagramService == nil {
+				return nil, errors.New("instagram service is not initialized")
+			}
+
+			caption, _ := args["caption"].(string)
+			if caption == "" {
+				caption = content
+			}
+			mediaType, _ := args["media_type"].(string)
+			mediaPath, _ := args["media_path"].(string)
+
+			var mediaData []byte
+			if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
+				decoded, decErr := base64.StdEncoding.DecodeString(rawData)
+				if decErr != nil {
+					return nil, fmt.Errorf("invalid base64 encoding in media_data: %w", decErr)
+				}
+				mediaData = decoded
+			}
+
+			resp, err := s.instagramService.Publish(ctx, &instagram.PublishPostRequest{
+				UserID:         actualUserID,
+				Caption:        caption,
+				MediaURLs:      mediaURLs,
+				MediaPath:      mediaPath,
+				MediaData:      mediaData,
+				MediaType:      mediaType,
+				IdempotencyKey: idempotencyKey,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			resultJSON, _ := json.Marshal(resp)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
 		default:
-			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube')", platform)
+			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube', 'instagram')", platform)
 		}
 	}
 
@@ -351,8 +423,26 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IsError: false,
 			}, nil
 
+		case "instagram":
+			if s.instagramService == nil {
+				return nil, errors.New("instagram service is not initialized")
+			}
+
+			metrics, err := s.instagramService.GetAnalytics(ctx, actualUserID, postID)
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving Instagram insights: %w", err)
+			}
+
+			resultJSON, _ := json.Marshal(metrics)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
 		default:
-			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube')", platform)
+			return nil, fmt.Errorf("platform '%s' is not supported in current release (supported: 'twitter', 'youtube', 'instagram')", platform)
 		}
 	}
 
@@ -397,8 +487,24 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IsError: false,
 			}, nil
 
+		case "instagram":
+			connectURL := fmt.Sprintf("http://localhost:%d/auth/instagram/connect?user_id=%s", s.cfg.ServerPort, userID)
+			payload := map[string]string{
+				"platform":    "instagram",
+				"connect_url": connectURL,
+				"status":      "action_required",
+				"instruction": "Open connect_url in your web browser to authenticate Meta Instagram Business and save tokens into vault",
+			}
+			b, _ := json.Marshal(payload)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(b)},
+				},
+				IsError: false,
+			}, nil
+
 		default:
-			return nil, fmt.Errorf("platform '%s' connection is not supported yet (supported: 'twitter', 'youtube')", platform)
+			return nil, fmt.Errorf("platform '%s' connection is not supported yet (supported: 'twitter', 'youtube', 'instagram')", platform)
 		}
 	}
 
@@ -878,4 +984,180 @@ func (s *HTTPServer) handleYouTubeCallback(w http.ResponseWriter, r *http.Reques
 </div>
 </body>
 </html>`, oauthState.userID, actualUserID)
+}
+
+// handleInstagramConnect initiates Meta OAuth 2.0 browser authentication for Instagram Business.
+func (s *HTTPServer) handleInstagramConnect(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = "test_user_1"
+	}
+
+	if _, err := uuid.Parse(userID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), userID, fmt.Sprintf("%s@example.com", userID))
+		if userErr == nil && user != nil {
+			userID = user.ID
+		}
+	}
+
+	stateBytes := make([]byte, 16)
+	_, _ = rand.Read(stateBytes)
+	state := hex.EncodeToString(stateBytes)
+
+	callbackURL := strings.TrimSpace(s.cfg.InstagramRedirectURI)
+	if callbackURL == "" {
+		callbackURL = fmt.Sprintf("http://%s:%d/auth/instagram/callback", s.cfg.ServerHost, s.cfg.ServerPort)
+		if s.cfg.ServerHost == "0.0.0.0" {
+			callbackURL = fmt.Sprintf("http://localhost:%d/auth/instagram/callback", s.cfg.ServerPort)
+		}
+	}
+
+	s.oauthStatesMu.Lock()
+	s.oauthStates[state] = twitterOAuthState{
+		codeVerifier: "",
+		userID:       userID,
+		redirectURI:  callbackURL,
+		expiresAt:    time.Now().Add(10 * time.Minute),
+	}
+	s.oauthStatesMu.Unlock()
+
+	params := make(map[string][]string)
+	params["response_type"] = []string{"code"}
+	params["client_id"] = []string{s.cfg.InstagramClientID}
+	params["redirect_uri"] = []string{callbackURL}
+	params["scope"] = []string{strings.Join(instagram.RequiredScopes, ",")}
+	params["state"] = []string{state}
+
+	values := urlValues(params)
+	authURL := instagram.MetaOAuthDialogURL + "?" + values
+
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// handleInstagramCallback handles the OAuth 2.0 callback from Meta for Instagram.
+func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	code := q.Get("code")
+	state := q.Get("state")
+	errParam := q.Get("error")
+	errReason := q.Get("error_reason")
+
+	if errParam != "" || errReason != "" {
+		http.Error(w, fmt.Sprintf("Meta OAuth Authorization Denied: %s (%s)", errParam, errReason), http.StatusBadRequest)
+		return
+	}
+
+	if code == "" || state == "" {
+		http.Error(w, "Invalid callback: code and state required", http.StatusBadRequest)
+		return
+	}
+
+	s.oauthStatesMu.Lock()
+	oauthState, exists := s.oauthStates[state]
+	if exists {
+		delete(s.oauthStates, state)
+	}
+	s.oauthStatesMu.Unlock()
+
+	if !exists || time.Now().After(oauthState.expiresAt) {
+		http.Error(w, "Invalid or expired OAuth state parameter (replay attack prevented)", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Exchange short-lived authorization code
+	shortLivedTok, err := s.instagramClient.ExchangeShortLivedToken(r.Context(), code, oauthState.redirectURI)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed exchanging authorization code with Meta Graph API: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// 2. Upgrade to 60-day long-lived access token
+	longLivedTok, err := s.instagramClient.ExchangeLongLivedToken(r.Context(), shortLivedTok.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed upgrading to long-lived Meta token: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// 3. Discover Instagram Business/Creator Account
+	igAccount, _, err := s.instagramClient.GetInstagramBusinessAccount(r.Context(), longLivedTok.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Instagram Business Account Discovery Failed: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	actualUserID := oauthState.userID
+	if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+		if userErr == nil && user != nil {
+			actualUserID = user.ID
+		}
+	}
+
+	if s.repo != nil {
+		expiresAt := time.Now().UTC().Add(time.Duration(longLivedTok.ExpiresIn) * time.Second)
+		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "instagram", []byte(longLivedTok.AccessToken), nil, expiresAt, instagram.RequiredScopes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, `
+<!DOCTYPE html>
+<html>
+<head><title>Instagram Connected</title><style>body{font-family:sans-serif;background:#0d0d0d;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;} .card{background:#1a1a1a;padding:40px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-width:480px;border:1px solid #333;} h1{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;} p{color:#aaa;line-height:1.6;} .badge{background:#00ba7c22;color:#00ba7c;padding:6px 16px;border-radius:20px;display:inline-block;font-weight:bold;margin-bottom:16px;} .handle{font-weight:bold;color:#fff;}</style></head>
+<body>
+<div class="card">
+<div class="badge">Connected Successfully</div>
+<h1>Instagram Business Authorized</h1>
+<p>Your Instagram Business account <span class="handle">@%s</span> (ID: %s) has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong> (UUID: %s).</p>
+<p>You can now use the <code>publish_post</code> (supporting photos and 90s Reels) and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
+</div>
+</body>
+</html>`, igAccount.Username, igAccount.ID, oauthState.userID, actualUserID)
+}
+
+// handleInstagramWebhook handles Meta webhook challenge verifications and event delivery.
+func (s *HTTPServer) handleInstagramWebhook(w http.ResponseWriter, r *http.Request) {
+	// 1. Meta Webhook Subscription Challenge (GET)
+	if r.Method == http.MethodGet {
+		mode := r.URL.Query().Get("hub.mode")
+		token := r.URL.Query().Get("hub.verify_token")
+		challenge := r.URL.Query().Get("hub.challenge")
+
+		if mode == "subscribe" && token == s.cfg.InstagramWebhookSecret && challenge != "" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(challenge))
+			return
+		}
+
+		http.Error(w, "Forbidden: invalid hub.verify_token", http.StatusForbidden)
+		return
+	}
+
+	// 2. Incoming Event Notification (POST)
+	if r.Method == http.MethodPost {
+		rawPayload, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed reading webhook body", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+
+		sigHeader := r.Header.Get("X-Hub-Signature-256")
+		if s.cfg.InstagramWebhookSecret != "" {
+			if err := instagram.VerifyWebhookSignature(rawPayload, sigHeader, s.cfg.InstagramWebhookSecret); err != nil {
+				http.Error(w, "Unauthorized: invalid signature", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("EVENT_RECEIVED"))
+		return
+	}
+
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
