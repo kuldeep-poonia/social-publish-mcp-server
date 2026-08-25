@@ -1,5 +1,10 @@
 # Internal project planning documents (confidential)
 docs-internal/
+PRODUCT.md
+BUILD_PLAN.md
+GEMINI_INSTRUCTIONS.md
+WORKFLOW.md
+workflow.md
 
 # Environment files and credentials
 .env
@@ -18,7 +23,7 @@ k8s/secret.yaml
 k8s/*-secret.yaml
 !deploy/k8s/secret.example.yaml
 
-# Raw media / video recordings (stored separately)
+# Raw media / audio & video recordings (stored separately)
 videos/
 /videos/
 *.mp4
@@ -26,6 +31,9 @@ videos/
 *.mov
 *.avi
 *.webm
+*.mp3
+*.wav
+*.aac
 
 # Binaries and build artifacts
 bin/
