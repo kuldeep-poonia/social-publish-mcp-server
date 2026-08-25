@@ -140,7 +140,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"] },
   "timezone": "browser",
-  "title": "Social Publishing MCP Server — Production Telemetry",
+  "title": "Social Publishing MCP Server - Production Telemetry",
   "uid": "social-mcp-prod-overview",
-  "version": 1
+  "version": 2
 }
