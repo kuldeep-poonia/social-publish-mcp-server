@@ -8,17 +8,43 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 )
 
 // TestInstagramRealAPI_WANVerification runs live automated WAN integration against Meta Graph API v21.0.
 func TestInstagramRealAPI_WANVerification(t *testing.T) {
-	clientID := os.Getenv("INSTAGRAM_CLIENT_ID")
-	clientSecret := os.Getenv("INSTAGRAM_CLIENT_SECRET")
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("failed loading config: %v", err)
+	}
+
+	clientID := cfg.InstagramClientID
+	clientSecret := cfg.InstagramClientSecret
 	accessToken := os.Getenv("INSTAGRAM_ACCESS_TOKEN")
 	testMediaID := os.Getenv("INSTAGRAM_TEST_MEDIA_ID")
+	if testMediaID == "" {
+		testMediaID = "18106694998880108" // Newly published test post
+	}
+
+	if accessToken == "" {
+		// Attempt to load decrypted token from Token Vault for test_user_1
+		db, repo, _ := setupTestDB(t)
+		if db != nil && repo != nil {
+			defer db.Close()
+			ctx := context.Background()
+			user, uErr := repo.GetOrCreateUserByUsername(ctx, "test_user_1", "test_user_1@example.com")
+			if uErr == nil && user != nil {
+				decAccess, _, _, _, tErr := repo.GetDecryptedPlatformConnection(ctx, user.ID, "instagram")
+				if tErr == nil && len(decAccess) > 0 {
+					accessToken = string(decAccess)
+				}
+			}
+		}
+	}
 
 	if clientID == "" || clientSecret == "" || accessToken == "" {
-		t.Skip("Skipping live Meta Graph API integration test: INSTAGRAM_CLIENT_ID, INSTAGRAM_CLIENT_SECRET, or INSTAGRAM_ACCESS_TOKEN not set in environment")
+		t.Skip("Skipping live Meta Graph API integration test: INSTAGRAM_CLIENT_ID, INSTAGRAM_CLIENT_SECRET, or INSTAGRAM_ACCESS_TOKEN not available")
 	}
 
 	client := NewClient(clientID, clientSecret)
