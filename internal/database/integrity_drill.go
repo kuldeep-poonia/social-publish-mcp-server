@@ -159,7 +159,14 @@ func VerifyDataIntegrityAndDecryptability(ctx context.Context, snapshot *Databas
 		TablesVerified: len(snapshot.Tables),
 	}
 
-	for tableName, expectedTable := range snapshot.Tables {
+	tableNames := make([]string, 0, len(snapshot.Tables))
+	for tName := range snapshot.Tables {
+		tableNames = append(tableNames, tName)
+	}
+	sort.Strings(tableNames)
+
+	for _, tableName := range tableNames {
+		expectedTable := snapshot.Tables[tableName]
 		currentSnapshot, err := GenerateIntegritySnapshot(ctx, db, []string{tableName})
 		if err != nil {
 			return nil, fmt.Errorf("failed generating verification snapshot for table '%s': %w", tableName, err)

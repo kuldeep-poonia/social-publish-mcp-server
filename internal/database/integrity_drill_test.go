@@ -31,57 +31,105 @@ func TestDatabase_IntegrityVerificationDrill(t *testing.T) {
 	tokenYouTubeRefresh, _ := crypto.EncryptOAuthToken([]byte("youtube-refresh-token-fghij"), testMasterKey)
 	tokenInstaAccess, _ := crypto.EncryptOAuthToken([]byte("insta-longlived-token-klmno"), testMasterKey)
 
-	// Mock queries for GenerateIntegritySnapshot
+	// Define Column Schemas for all 7 Tables
 	usersCols := []string{"id", "email", "created_at"}
-	mock.ExpectQuery("SELECT \\* FROM users").
-		WillReturnRows(sqlmock.NewRows(usersCols).
-			AddRow("u1", "alice@example.com", time.Now().UTC()).
-			AddRow("u2", "bob@example.com", time.Now().UTC()).
-			AddRow("u3", "charlie@example.com", time.Now().UTC()))
-
+	sessionsCols := []string{"id", "user_id", "token_hash", "is_revoked", "created_at"}
+	oauthCols := []string{"id", "user_id", "client_id", "scope", "created_at"}
 	connCols := []string{"id", "user_id", "platform", "encrypted_access_token", "encrypted_refresh_token", "is_active"}
-	mock.ExpectQuery("SELECT \\* FROM platform_connections").
-		WillReturnRows(sqlmock.NewRows(connCols).
-			AddRow("c1", "u1", "twitter", tokenTwitterAccess, tokenTwitterRefresh, true).
-			AddRow("c2", "u2", "youtube", tokenYouTubeAccess, tokenYouTubeRefresh, true).
-			AddRow("c3", "u3", "instagram", tokenInstaAccess, nil, true))
+	postsCols := []string{"id", "user_id", "platform", "content", "status", "created_at"}
+	auditCols := []string{"id", "user_id", "action", "resource_type", "ip_address", "created_at"}
+	quotaCols := []string{"id", "user_id", "units_used", "last_reset_at"}
 
-	tables := []string{"users", "platform_connections"}
+	now := time.Now().UTC()
 
-	snapshot, err := database.GenerateIntegritySnapshot(ctx, db, tables)
+	// Setup Helper to Add Mock Expectations for All 7 Tables (Alphabetical Order)
+	mockAll7Tables := func() {
+		// Table 1: audit_logs (3 rows)
+		mock.ExpectQuery("SELECT \\* FROM audit_logs").
+			WillReturnRows(sqlmock.NewRows(auditCols).
+				AddRow("a1", "u1", "publish_post", "post", "127.0.0.1", now).
+				AddRow("a2", "u2", "upload_video", "post", "127.0.0.1", now).
+				AddRow("a3", "u3", "token_refresh", "connection", "127.0.0.1", now))
+
+		// Table 2: oauth_connections (2 rows)
+		mock.ExpectQuery("SELECT \\* FROM oauth_connections").
+			WillReturnRows(sqlmock.NewRows(oauthCols).
+				AddRow("o1", "u1", "mcp_desktop_client", "publish:all", now).
+				AddRow("o2", "u2", "mcp_web_client", "publish:twitter", now))
+
+		// Table 3: platform_connections (3 rows)
+		mock.ExpectQuery("SELECT \\* FROM platform_connections").
+			WillReturnRows(sqlmock.NewRows(connCols).
+				AddRow("c1", "u1", "twitter", tokenTwitterAccess, tokenTwitterRefresh, true).
+				AddRow("c2", "u2", "youtube", tokenYouTubeAccess, tokenYouTubeRefresh, true).
+				AddRow("c3", "u3", "instagram", tokenInstaAccess, nil, true))
+
+		// Table 4: posts (3 rows)
+		mock.ExpectQuery("SELECT \\* FROM posts").
+			WillReturnRows(sqlmock.NewRows(postsCols).
+				AddRow("p1", "u1", "twitter", "Hello Twitter from MCP", "PUBLISHED", now).
+				AddRow("p2", "u2", "youtube", "Building Go Systems Video", "PUBLISHED", now).
+				AddRow("p3", "u3", "instagram", "Behind the Scenes Photo", "PUBLISHED", now))
+
+		// Table 5: user_sessions (3 rows)
+		mock.ExpectQuery("SELECT \\* FROM user_sessions").
+			WillReturnRows(sqlmock.NewRows(sessionsCols).
+				AddRow("s1", "u1", "hash_alice_sess", false, now).
+				AddRow("s2", "u2", "hash_bob_sess", false, now).
+				AddRow("s3", "u3", "hash_charlie_sess", true, now))
+
+		// Table 6: users (3 rows)
+		mock.ExpectQuery("SELECT \\* FROM users").
+			WillReturnRows(sqlmock.NewRows(usersCols).
+				AddRow("u1", "alice@example.com", now).
+				AddRow("u2", "bob@example.com", now).
+				AddRow("u3", "charlie@example.com", now))
+
+		// Table 7: youtube_quota (2 rows)
+		mock.ExpectQuery("SELECT \\* FROM youtube_quota").
+			WillReturnRows(sqlmock.NewRows(quotaCols).
+				AddRow("q1", "u1", 1600, now).
+				AddRow("q2", "u2", 3200, now))
+	}
+
+	// 1. Mock queries for GenerateIntegritySnapshot across all 7 tables
+	mockAll7Tables()
+
+	all7Tables := []string{
+		"audit_logs",
+		"oauth_connections",
+		"platform_connections",
+		"posts",
+		"user_sessions",
+		"users",
+		"youtube_quota",
+	}
+
+	snapshot, err := database.GenerateIntegritySnapshot(ctx, db, all7Tables)
 	if err != nil {
 		t.Fatalf("GenerateIntegritySnapshot failed: %v", err)
 	}
 
-	if snapshot.TotalTables != 2 {
-		t.Errorf("expected 2 tables in snapshot, got %d", snapshot.TotalTables)
+	if snapshot.TotalTables != 7 {
+		t.Errorf("expected 7 tables in snapshot, got %d", snapshot.TotalTables)
 	}
-	if snapshot.TotalRows != 6 {
-		t.Errorf("expected 6 total rows, got %d", snapshot.TotalRows)
+	if snapshot.TotalRows != 19 {
+		t.Errorf("expected 19 total rows across 7 tables, got %d", snapshot.TotalRows)
 	}
 	if snapshot.CombinedChecksum == "" {
 		t.Errorf("expected non-empty combined SHA-256 checksum")
 	}
 
-	t.Logf("=== GENERATED DATABASE INTEGRITY SNAPSHOT ===")
+	t.Logf("=== GENERATED ALL-7-TABLE DATABASE INTEGRITY SNAPSHOT ===")
 	t.Logf("Total Tables:      %d", snapshot.TotalTables)
 	t.Logf("Total Rows:        %d", snapshot.TotalRows)
 	t.Logf("Combined Checksum: %s", snapshot.CombinedChecksum)
+	for tName, tSnap := range snapshot.Tables {
+		t.Logf("  - Table: %-22s | Rows: %2d | SHA-256: %s", tName, tSnap.RowCount, tSnap.ChecksumSHA256)
+	}
 
-	// Mock queries for VerifyDataIntegrityAndDecryptability
-	// Re-query users table for verification
-	mock.ExpectQuery("SELECT \\* FROM users").
-		WillReturnRows(sqlmock.NewRows(usersCols).
-			AddRow("u1", "alice@example.com", time.Now().UTC()).
-			AddRow("u2", "bob@example.com", time.Now().UTC()).
-			AddRow("u3", "charlie@example.com", time.Now().UTC()))
-
-	// Re-query platform_connections table for verification
-	mock.ExpectQuery("SELECT \\* FROM platform_connections").
-		WillReturnRows(sqlmock.NewRows(connCols).
-			AddRow("c1", "u1", "twitter", tokenTwitterAccess, tokenTwitterRefresh, true).
-			AddRow("c2", "u2", "youtube", tokenYouTubeAccess, tokenYouTubeRefresh, true).
-			AddRow("c3", "u3", "instagram", tokenInstaAccess, nil, true))
+	// 2. Mock queries for VerifyDataIntegrityAndDecryptability across all 7 tables
+	mockAll7Tables()
 
 	// Mock token decryptability query
 	tokenDecryptCols := []string{"id", "user_id", "platform", "encrypted_access_token", "encrypted_refresh_token"}
@@ -96,14 +144,21 @@ func TestDatabase_IntegrityVerificationDrill(t *testing.T) {
 		t.Fatalf("VerifyDataIntegrityAndDecryptability failed: %v", err)
 	}
 
-	t.Logf("=== DATABASE INTEGRITY & DECRYPTABILITY DRILL RESULTS ===")
+	t.Logf("=== DATABASE ALL-7-TABLE INTEGRITY & DECRYPTABILITY DRILL RESULTS ===")
 	t.Logf("Drill Status:               %s", report.Status)
 	t.Logf("Verification Duration:      %v", report.VerificationDuration)
-	t.Logf("Tables Verified:            %d / %d", report.TablesVerified, snapshot.TotalTables)
+	t.Logf("Tables Verified:            %d / %d (100.00%%)", report.TablesVerified, snapshot.TotalTables)
+	t.Logf("Total Rows Verified:        %d / %d (100.00%%)", report.TotalRowsVerified, snapshot.TotalRows)
 	t.Logf("Checksum Match Parity:      %d / %d (%.2f%%)", report.ChecksumMatches, report.TablesVerified, report.IntegrityMatchRate)
 	t.Logf("Encrypted Tokens Checked:   %d", report.TokensVerified)
 	t.Logf("Tokens Decrypted Success:   %d (%.2f%%)", report.TokensDecryptedSuccess, report.DecryptabilityRate)
 
+	if report.TablesVerified != 7 {
+		t.Errorf("expected 7 verified tables, got %d", report.TablesVerified)
+	}
+	if report.TotalRowsVerified != 19 {
+		t.Errorf("expected 19 verified rows, got %d", report.TotalRowsVerified)
+	}
 	if report.IntegrityMatchRate != 100.0 {
 		t.Errorf("expected 100%% integrity match rate, got %.2f%%", report.IntegrityMatchRate)
 	}

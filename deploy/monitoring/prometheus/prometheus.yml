@@ -8,7 +8,7 @@ scrape_configs:
     scheme: "http"
     authorization:
       type: Bearer
-      credentials: "${METRICS_BEARER_TOKEN:-local_dev_metrics_token_prometheus_12345}"
+      credentials: "local_dev_metrics_token_prometheus_12345"
     static_configs:
       - targets: ["app:8080"]
         labels:
