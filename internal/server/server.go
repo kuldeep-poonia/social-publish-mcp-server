@@ -29,6 +29,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/telemetry"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -60,6 +61,8 @@ type HTTPServer struct {
 	streamQueue         *queue.RedisStreamQueue
 	workerPool          *queue.WorkerPool
 	dlqManager          *queue.DLQManager
+	telemetry           *telemetry.TelemetryRegistry
+	logger              *telemetry.Logger
 	oauthStatesMu       sync.Mutex
 	oauthStates         map[string]twitterOAuthState
 }
@@ -148,6 +151,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		redisClient:         rdb,
 		streamQueue:         streamQueue,
 		dlqManager:          dlqManager,
+		telemetry:           telemetry.DefaultTelemetry(),
+		logger:              telemetry.DefaultLogger(),
 		oauthStates:         make(map[string]twitterOAuthState),
 	}
 
@@ -168,8 +173,11 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mux := http.NewServeMux()
 
-	// Healthcheck
+	// Healthcheck (Public & Minimal Safe Payload)
 	mux.HandleFunc("/health", s.handleHealth)
+
+	// Prometheus Metrics Endpoint (Protected with Bearer Token Authentication)
+	mux.Handle("/metrics", s.telemetry.MetricsHandler(s.cfg.MetricsBearerToken))
 
 	// OAuth 2.1 Endpoints
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorize)
@@ -204,12 +212,13 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/mcp/sse", s.authMiddleware(transport.HandleSSE))
 	mux.HandleFunc("/mcp/messages", s.authMiddleware(transport.HandleMessages))
 
-	// Wrap root with CORS and Rate Limiting
-	handler := s.rateLimitMiddleware(s.corsMiddleware(mux))
+	// Wrap root with Telemetry, CORS, and Rate Limiting
+	handler := s.telemetryMiddleware(s.rateLimitMiddleware(s.corsMiddleware(mux)))
 
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.ServerHost, cfg.ServerPort),
 		Handler:      handler,
+		TLSConfig:    NewHardenedTLSConfig(),
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -662,9 +671,34 @@ func (s *HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status":    "healthy",
+		"status":    "ok",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "0.1.0",
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.statusCode = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (s *HTTPServer) telemetryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+
+		next.ServeHTTP(recorder, r)
+
+		duration := time.Since(start)
+		clientID := r.Header.Get("X-Client-ID")
+		if clientID == "" {
+			clientID = "anonymous"
+		}
+		s.telemetry.ObserveRequest(r.Method, "http", fmt.Sprintf("%d", recorder.statusCode), clientID, duration)
 	})
 }
 
