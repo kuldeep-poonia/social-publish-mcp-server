@@ -13,6 +13,7 @@ import (
 
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/idempotency"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 )
 
 const (
@@ -81,9 +82,16 @@ func (s *Service) PublishTweet(ctx context.Context, req *PublishTweetRequest) (*
 		idempotencyKey = hex.EncodeToString(h.Sum(nil))
 	}
 
-	// 2. Validate tweet text constraints before DB acquisition
+	// 2. Validate tweet text constraints and media URLs before DB acquisition
 	if _, err := ValidateTweetText(req.Content); err != nil {
 		return nil, err
+	}
+	for _, u := range req.MediaURLs {
+		if strings.HasPrefix(strings.ToLower(u), "http://") || strings.HasPrefix(strings.ToLower(u), "https://") {
+			if _, valErr := security.ValidateMediaURL(u); valErr != nil {
+				return nil, fmt.Errorf("twitter media_urls SSRF validation failed: %w", valErr)
+			}
+		}
 	}
 
 	// 3. Acquire Idempotency Lock via shared Idempotency Engine

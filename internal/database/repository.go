@@ -286,3 +286,43 @@ func (r *Repository) RevokePlatformConnection(ctx context.Context, userID, platf
 		"platform": platform,
 	})
 }
+
+// GetPostByID retrieves a single post by its ID and validates multi-tenant actor isolation.
+func (r *Repository) GetPostByID(ctx context.Context, postID string) (*models.Post, error) {
+	query := `
+		SELECT id, user_id, platform, platform_post_id, content, media_urls, status, scheduled_at, published_at, idempotency_key, created_at, updated_at
+		FROM posts
+		WHERE id = $1;
+	`
+	row := r.db.QueryRowContext(ctx, query, postID)
+
+	var p models.Post
+	var platformPostID sql.NullString
+	var scheduledAt, publishedAt sql.NullTime
+
+	if err := row.Scan(&p.ID, &p.UserID, &p.Platform, &platformPostID, &p.Content, &p.MediaURLs, &p.Status, &scheduledAt, &publishedAt, &p.IdempotencyKey, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed fetching post by id: %w", err)
+	}
+
+	if platformPostID.Valid {
+		p.PlatformPostID = platformPostID.String
+	}
+	if scheduledAt.Valid {
+		p.ScheduledAt = &scheduledAt.Time
+	}
+	if publishedAt.Valid {
+		p.PublishedAt = &publishedAt.Time
+	}
+
+	// Enforce actor isolation if actor context is present
+	actor := GetActor(ctx)
+	if actor.ActorID != "" && actor.ActorID != "anonymous" && actor.ActorID != p.UserID {
+		return nil, ErrUnauthorizedAccess
+	}
+
+	return &p, nil
+}
+

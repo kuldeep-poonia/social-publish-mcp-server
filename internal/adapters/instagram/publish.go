@@ -19,6 +19,7 @@ import (
 
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/idempotency"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 )
 
 const (
@@ -137,6 +138,9 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 		}
 		mediaBytes = readBytes
 	} else if len(req.MediaURLs) > 0 && req.MediaURLs[0] != "" {
+		if _, valErr := security.ValidateMediaURL(req.MediaURLs[0]); valErr != nil {
+			return nil, fmt.Errorf("instagram media_urls validation failed: %w", valErr)
+		}
 		mediaURL = req.MediaURLs[0]
 	} else {
 		return nil, errors.New("instagram publish: missing required media (must provide media_path, media_data, or media_urls)")

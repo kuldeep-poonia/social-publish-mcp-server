@@ -29,6 +29,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/telemetry"
 	"github.com/redis/go-redis/v9"
 )
@@ -250,7 +251,13 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		var mediaURLs []string
 		if rawURLs, ok := args["media_urls"].([]interface{}); ok {
 			for _, u := range rawURLs {
-				if str, ok := u.(string); ok {
+				if str, ok := u.(string); ok && strings.TrimSpace(str) != "" {
+					// Preflight SSRF validate if URL contains HTTP/HTTPS scheme
+					if strings.HasPrefix(strings.ToLower(str), "http://") || strings.HasPrefix(strings.ToLower(str), "https://") {
+						if _, valErr := security.ValidateMediaURL(str); valErr != nil {
+							return nil, fmt.Errorf("invalid or blocked media URL: %w", valErr)
+						}
+					}
 					mediaURLs = append(mediaURLs, str)
 				}
 			}
@@ -340,11 +347,19 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				videoBytes = data
 			}
 
-			// 2. Check media_urls if pointing to local file path
+			// 2. Check media_urls if pointing to local file path or remote URL
 			if len(videoBytes) == 0 && len(mediaURLs) > 0 {
-				data, readErr := os.ReadFile(mediaURLs[0])
-				if readErr == nil {
-					videoBytes = data
+				if strings.HasPrefix(strings.ToLower(mediaURLs[0]), "http://") || strings.HasPrefix(strings.ToLower(mediaURLs[0]), "https://") {
+					fetchedBytes, _, fetchErr := security.FetchMediaWithSSRFProtection(ctx, mediaURLs[0], 500*1024*1024) // 500MB max
+					if fetchErr != nil {
+						return nil, fmt.Errorf("failed fetching remote video URL with SSRF protection: %w", fetchErr)
+					}
+					videoBytes = fetchedBytes
+				} else {
+					data, readErr := os.ReadFile(mediaURLs[0])
+					if readErr == nil {
+						videoBytes = data
+					}
 				}
 			}
 
@@ -1366,9 +1381,17 @@ func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queu
 			}
 			videoBytes = data
 		} else if len(job.MediaURLs) > 0 {
-			data, readErr := os.ReadFile(job.MediaURLs[0])
-			if readErr == nil {
-				videoBytes = data
+			if strings.HasPrefix(strings.ToLower(job.MediaURLs[0]), "http://") || strings.HasPrefix(strings.ToLower(job.MediaURLs[0]), "https://") {
+				fetchedBytes, _, fetchErr := security.FetchMediaWithSSRFProtection(ctx, job.MediaURLs[0], 500*1024*1024)
+				if fetchErr != nil {
+					return fmt.Errorf("failed fetching remote video URL with SSRF protection in background retry: %w", fetchErr)
+				}
+				videoBytes = fetchedBytes
+			} else {
+				data, readErr := os.ReadFile(job.MediaURLs[0])
+				if readErr == nil {
+					videoBytes = data
+				}
 			}
 		}
 
