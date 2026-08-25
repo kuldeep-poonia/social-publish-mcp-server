@@ -9,6 +9,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/png"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,6 +149,19 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 		valResult, valErr = s.validator.SniffAndValidate(bytes.NewReader(mediaBytes), int64(len(mediaBytes)))
 		if valErr != nil {
 			return nil, fmt.Errorf("media validation failed: %w", valErr)
+		}
+
+		// Meta Graph API strictly requires JPEG for Instagram feed photos. Auto-convert PNG -> JPEG.
+		if valResult.Extension == "png" {
+			img, _, decErr := image.Decode(bytes.NewReader(mediaBytes))
+			if decErr == nil && img != nil {
+				var buf bytes.Buffer
+				if encErr := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); encErr == nil {
+					mediaBytes = buf.Bytes()
+					valResult.Extension = "jpg"
+					valResult.MimeType = "image/jpeg"
+				}
+			}
 		}
 	}
 

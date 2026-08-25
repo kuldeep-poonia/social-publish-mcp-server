@@ -310,7 +310,7 @@ func (c *Client) PublishMedia(ctx context.Context, igUserID, creationID, accessT
 
 // GetMediaInsights retrieves performance and engagement metrics for a published Instagram post or reel.
 func (c *Client) GetMediaInsights(ctx context.Context, mediaID, accessToken string) (*UnifiedInstagramMetrics, error) {
-	endpoint := fmt.Sprintf("%s/%s/insights?metric=impressions,reach,likes,comments,saved,shares,plays,total_interactions&access_token=%s",
+	endpoint := fmt.Sprintf("%s/%s/insights?metric=impressions,reach,likes,comments,saved,shares,total_interactions,views&access_token=%s",
 		c.apiBase, mediaID, url.QueryEscape(accessToken))
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -360,7 +360,7 @@ func (c *Client) GetMediaInsights(ctx context.Context, mediaID, accessToken stri
 			metrics.Saved = val
 		case "shares":
 			metrics.Shares = val
-		case "plays":
+		case "views", "plays":
 			metrics.Plays = val
 		case "total_interactions":
 			metrics.TotalInteractions = val
