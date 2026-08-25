@@ -84,3 +84,13 @@ func DecryptOAuthToken(ciphertext []byte, key []byte) ([]byte, error) {
 
 	return plaintext, nil
 }
+
+// EncryptAESGCM encrypts plaintext data using AES-256-GCM authenticated encryption.
+func EncryptAESGCM(plaintext []byte, key []byte) ([]byte, error) {
+	return EncryptOAuthToken(plaintext, key)
+}
+
+// DecryptAESGCM authenticates and decrypts AES-256-GCM ciphertext.
+func DecryptAESGCM(ciphertext []byte, key []byte) ([]byte, error) {
+	return DecryptOAuthToken(ciphertext, key)
+}
