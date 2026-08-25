@@ -300,12 +300,19 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 
 		switch platform {
 		case "twitter":
-			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "twitter")
+			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "twitter")
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving Twitter credentials: %w", err)
 			}
 
 			metrics, err := s.twitterClient.GetTweetAnalytics(ctx, string(accessBytes), postID)
+			if err != nil && len(refreshBytes) > 0 && s.twitterClient != nil {
+				// Attempt auto 401 token refresh
+				if newTokens, refErr := s.twitterClient.RefreshToken(ctx, string(refreshBytes)); refErr == nil {
+					_ = s.repo.SavePlatformConnection(ctx, actualUserID, "twitter", []byte(newTokens.AccessToken), []byte(newTokens.RefreshToken), time.Now().Add(time.Duration(newTokens.ExpiresIn)*time.Second), scopes)
+					metrics, err = s.twitterClient.GetTweetAnalytics(ctx, newTokens.AccessToken, postID)
+				}
+			}
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving tweet analytics: %w", err)
 			}
@@ -319,12 +326,19 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}, nil
 
 		case "youtube":
-			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
+			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving YouTube credentials: %w", err)
 			}
 
 			metrics, err := s.youtubeClient.GetVideoAnalytics(ctx, string(accessBytes), postID)
+			if err != nil && len(refreshBytes) > 0 && s.youtubeClient != nil {
+				// Attempt auto 401 token refresh
+				if newTokens, refErr := s.youtubeClient.RefreshToken(ctx, string(refreshBytes)); refErr == nil {
+					_ = s.repo.SavePlatformConnection(ctx, actualUserID, "youtube", []byte(newTokens.AccessToken), []byte(newTokens.RefreshToken), time.Now().Add(time.Duration(newTokens.ExpiresIn)*time.Second), scopes)
+					metrics, err = s.youtubeClient.GetVideoAnalytics(ctx, newTokens.AccessToken, postID)
+				}
+			}
 			if err != nil {
 				return nil, fmt.Errorf("failed retrieving YouTube video analytics: %w", err)
 			}
