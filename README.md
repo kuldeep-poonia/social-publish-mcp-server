@@ -3,70 +3,76 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.6-00ADD8?style=flat&logo=go)](https://golang.org)
 [![MCP Specification](https://img.shields.io/badge/MCP-2024--11--05-8A2BE2?style=flat)](https://modelcontextprotocol.io)
 [![Security Standard](https://img.shields.io/badge/OWASP-API%20Top%2010%20Compliant-green)](SECURITY.md)
-[![Docker](https://img.shields.io/badge/Docker-Multi--Container%20Ready-2496ED?style=flat&logo=docker)](deploy/docker-compose.yml)
+[![Docker Ready](https://img.shields.io/badge/Docker-Multi--Container%20Ready-2496ED?style=flat&logo=docker)](deploy/docker-compose.yml)
 [![License: Commercial](https://img.shields.io/badge/License-Commercial%20%2F%20Proprietary-red.svg)](LICENSE)
 
-An enterprise-grade **Model Context Protocol (MCP)** server enabling AI assistants (Claude Desktop, ChatGPT connectors, Gemini, and autonomous multi-agent swarms) to securely publish media and retrieve unified engagement analytics across **Twitter / X**, **YouTube**, and **Instagram** under authenticated user authorization.
+A high-performance, secure **Model Context Protocol (MCP)** server that connects AI assistants (Claude Desktop, ChatGPT connectors, Gemini, and autonomous agent swarms) to **Twitter / X**, **YouTube**, and **Instagram** for automated content publishing and engagement analytics under authenticated user authorization.
 
 ---
 
 ## 📑 Table of Contents
-- [Executive Overview](#-executive-overview)
-- [Enterprise Architecture](#-enterprise-architecture)
-- [MCP Tool Catalog](#-mcp-tool-catalog)
-- [Platform Integration Capabilities](#-platform-integration-capabilities)
-- [Zero-Trust Security & Hardening](#-zero-trust-security--hardening)
-- [Production Deployment & Observability](#-production-deployment--observability)
-- [Documentation Suite](#-documentation-suite)
-- [Commercial Licensing & Enterprise Purchasing](#-commercial-licensing--enterprise-purchasing)
+1. [The Problem & The Solution](#1-the-problem--the-solution)
+2. [Key Architecture & Capabilities](#2-key-architecture--capabilities)
+3. [Supported Platforms & Feature Matrix](#3-supported-platforms--feature-matrix)
+4. [MCP Tool Catalog & API Specification](#4-mcp-tool-catalog--api-specification)
+5. [OAuth 2.1 Authentication & User Flow](#5-oauth-21-authentication--user-flow)
+6. [Security & Threat Mitigation](#6-security--threat-mitigation)
+7. [Production Deployment & Observability](#7-production-deployment--observability)
+8. [Complete Documentation Hub](#8-complete-documentation-hub)
+9. [Commercial Licensing & Purchasing](#9-commercial-licensing--purchasing)
 
 ---
 
-## 🌟 Executive Overview
+## 1. The Problem & The Solution
 
-Built in pure **Go (1.26.6)** for high throughput and microsecond-level latency, the Social Publishing MCP Server acts as an enterprise security gateway between AI agents and external social networks:
+### The Challenge with AI Agents & Social APIs
+Allowing Large Language Models (LLMs) and autonomous agents to publish directly to social networks introduces critical risks:
+- **Credential Exposure**: Storing raw API tokens in client environments or passing them through prompt contexts risks accidental leakages.
+- **SSRF & DNS-Rebinding Vulnerabilities**: When agents ingest remote media URLs to publish, malicious inputs can probe cloud metadata services (`169.254.169.254`) or internal private networks.
+- **Duplicate Publishing on Retries**: Network blips often cause agents to re-send requests, accidentally creating duplicate tweets or double-consuming daily video quotas.
+- **Upstream Rate Limiting**: Social networks enforce strict rate limits (e.g. YouTube's $10{,}000\text{ units/day}$ quota budget; Twitter's per-tier rate caps) that crash naive integrations.
 
-- **Sync-First Resilient Publishing**: Immediate synchronous execution with automatic fallback to an encrypted Redis 7 Stream for exponential backoff retries on transient $429 / 503$ upstream errors.
-- **Kernel-Level Socket SSRF Defense**: Universal dial-time IP verification using socket-level hooks preventing Time-of-Check to Time-of-Use (TOCTOU) DNS rebinding attacks across all remote media ingestion.
-- **Zero-Trust Token Vault**: AES-256-GCM authenticated encryption for all OAuth credentials with decoupled out-of-band master key management and tenant session context isolation.
-- **Unified Multi-Platform Analytics**: Real-time aggregation of impressions, reach, likes, comments, retweets, and video views across platforms directly within the LLM conversation.
+### The Solution: Social Publishing MCP Server
+Written in pure **Go (1.26.6)** for microsecond latency and minimal memory footprint, the server acts as a hardened gateway between LLM clients and social APIs:
+- **Zero-Trust Token Vault**: Credentials never touch LLM prompts; all OAuth tokens are encrypted at rest with AES-256-GCM using out-of-band keys.
+- **Kernel-Level Socket SSRF Defense**: Remote URLs are validated at the operating system socket layer (`net.Dialer.Control`), defeating DNS rebinding and TOCTOU attacks.
+- **Sync-First Resilient Retry Queue**: First-attempt synchronous execution with automatic Redis 7 Stream fallback for transient $429 / 503$ platform errors.
+- **Transactional Idempotency**: Cryptographic deduplication prevents double-posting during connection retries.
 
 ---
 
-## 🏗️ Enterprise Architecture
-
-For the complete in-depth architectural specification, refer to [ARCHITECTURE.md](ARCHITECTURE.md).
+## 2. Key Architecture & Capabilities
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["AI Assistants & MCP Clients"]
-        Claude["Claude Desktop / Web"]
-        Agent["Custom AI Agents"]
-        GPT["ChatGPT Enterprise Connectors"]
+    subgraph ClientLayer["AI Assistants & Agents"]
+        Claude["Claude Desktop / Claude Web"]
+        Agent["Autonomous Agent Swarms"]
+        GPT["ChatGPT Connectors"]
     end
 
     subgraph ServerGateway["Social MCP Server Gateway"]
-        Router["HTTP Gateway & SSE Transport Engine"]
-        AuthGuard["OAuth 2.1 Server + PKCE S256 Guard"]
-        RateLimiter["Redis Token-Bucket Distributed Rate Limiter"]
+        Router["HTTP Gateway & SSE Transport"]
+        AuthGuard["OAuth 2.1 + PKCE S256 Guard"]
+        RateLimiter["Redis Token-Bucket Rate Limiter"]
         SSRF["Kernel Socket SSRF & IP-Pinning Guard"]
     end
 
-    subgraph Storage["Secure Persistence Tier"]
+    subgraph Storage["Persistence & Resilience Tier"]
         PG[("PostgreSQL 16 Multi-Tenant Vault")]
         Redis[("Redis 7 Stream Retry Queue")]
     end
 
-    subgraph Adapters["Platform Integration Adapters"]
-        Twitter["Twitter / X API v2 Adapter"]
-        YouTube["YouTube Data & Upload API v3 Adapter"]
-        Instagram["Meta / Instagram Graph API v20.0 Adapter"]
+    subgraph Adapters["Platform Adapters"]
+        Twitter["Twitter / X API v2"]
+        YouTube["YouTube Upload & Data v3"]
+        Instagram["Meta / Instagram Graph API v20.0"]
     end
 
-    subgraph Upstream["External Social Networks"]
-        XNet["Twitter / X API"]
-        YTNet["YouTube API"]
-        MetaNet["Meta Graph API"]
+    subgraph Upstream["Social Media Networks"]
+        XNet["Twitter / X"]
+        YTNet["YouTube"]
+        MetaNet["Instagram"]
     end
 
     ClientLayer ==>|JSON-RPC 2.0 / SSE| Router
@@ -82,85 +88,180 @@ flowchart TD
 
 ---
 
-## 🛠️ MCP Tool Catalog
+## 3. Supported Platforms & Feature Matrix
 
-The server implements the Model Context Protocol (MCP) standard over Streamable HTTP and SSE transports:
-
-| Tool Name | Supported Platforms | Description | Key Arguments |
-| :--- | :--- | :--- | :--- |
-| `publish_post` | `twitter`, `youtube`, `instagram` | Publishes text updates, photo attachments, or video content to the target platform. | `platform`, `content`, `media_urls`, `title`, `visibility`, `media_type` |
-| `get_post_analytics` | `twitter`, `youtube`, `instagram` | Retrieves real-time and historical engagement telemetry for a published post. | `platform`, `post_id` |
-| `list_connections` | All | Returns active social network connections for the authenticated user. | *(None)* |
-| `disconnect_platform` | `twitter`, `youtube`, `instagram` | Revokes upstream platform tokens and deactivates stored credentials. | `platform` |
-
----
-
-## 🚀 Platform Integration Capabilities
-
-### 🐦 Twitter / X (API v2)
-- Standalone text posts up to 280 characters (or long-form for premium tiers).
-- Multi-image attachments via chunked media endpoints.
-- Transactional idempotency locks preventing duplicate tweets during network retries.
-
-### 🎥 YouTube (Data & Upload API v3)
-- Resumable chunked video uploads ($8\text{MB}$ streaming chunks) with under $1\text{MB}$ heap allocation delta.
-- Zero quota waste: resumes aborted uploads mid-stream without restarting from byte zero.
-- Automated per-tenant daily quota budget tracker ($10{,}000\text{ units/day}$).
-
-### 📸 Instagram (Meta Graph API v20.0)
-- Feed photo publishing, carousel containers, and video Reels.
-- Automated PNG-to-JPEG transcoding pipeline satisfying Meta aspect ratio and format requirements.
-- Full engagement analytics: impressions, reach, likes, comments, shares, and saves.
+| Feature | Twitter / X | YouTube | Instagram |
+| :--- | :---: | :---: | :---: |
+| **Supported Media** | Plain Text, Images (`JPEG`, `PNG`, `GIF`, `WebP`) | Long-Form Videos & Shorts (`MP4`, `MOV`) | Feed Photos, Carousels, Reels (`JPEG`, `PNG`, `MP4`) |
+| **Resumable Uploads** | Chunked Media Upload | $8\text{MB}$ Streaming Chunks with Resumption | Container State Machine Polling |
+| **Image Transcoding** | Automatic Dimension Check | N/A (Video Only) | Automatic PNG-to-JPEG Conversion |
+| **Idempotency Locks** | Transactional Lock Keys | Resumable Upload Session ID | Container Deduplication |
+| **Engagement Telemetry** | Impressions, Likes, Retweets, Replies, Quotes | Views, Likes, Comments, Watch Duration | Impressions, Reach, Likes, Comments, Shares, Saves |
+| **Daily Quota Budget** | Rate-Limit Token Bucket | $10{,}000\text{ Units/Day}$ Tracker with Auto-Refund | Meta Rate-Limit Header Tracker |
 
 ---
 
-## 🔒 Zero-Trust Security & Hardening
+## 4. MCP Tool Catalog & API Specification
 
-| Security Mechanism | Technical Implementation | Empirical Verification |
+The server exposes standard Model Context Protocol tools over Streamable HTTP and SSE transports:
+
+### 1. `publish_post`
+Publishes text, image attachments, or video content to the target social network.
+
+**Tool Parameters:**
+```json
+{
+  "platform": "twitter | youtube | instagram",
+  "content": "Text caption or description for the post",
+  "media_urls": ["https://example.com/image.jpg"],
+  "title": "Required for YouTube video uploads",
+  "visibility": "public | unlisted | private",
+  "media_type": "IMAGE | VIDEO | REEL | CAROUSEL"
+}
+```
+
+**Success Response (JSON-RPC 2.0):**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "platform": "twitter",
+    "post_id": "1894726190283741184",
+    "status": "published",
+    "url": "https://twitter.com/user/status/1894726190283741184",
+    "published_at": "2026-08-25T15:30:00Z"
+  },
+  "id": 1
+}
+```
+
+---
+
+### 2. `get_post_analytics`
+Retrieves live engagement analytics and metric telemetry for a published post.
+
+**Tool Parameters:**
+```json
+{
+  "platform": "twitter | youtube | instagram",
+  "post_id": "1894726190283741184"
+}
+```
+
+**Sample Analytics Output:**
+```json
+{
+  "platform": "instagram",
+  "post_id": "17992834710294811",
+  "metrics": {
+    "impressions": 14250,
+    "reach": 11890,
+    "likes": 842,
+    "comments": 67,
+    "shares": 128,
+    "saved": 94
+  },
+  "retrieved_at": "2026-08-25T15:30:00Z"
+}
+```
+
+---
+
+### 3. `list_connections`
+Returns all active social network connections for the authenticated actor.
+
+**Sample Output:**
+```json
+{
+  "connections": [
+    { "platform": "twitter", "connected_at": "2026-08-20T10:00:00Z", "status": "active" },
+    { "platform": "youtube", "connected_at": "2026-08-21T12:00:00Z", "status": "active" },
+    { "platform": "instagram", "connected_at": "2026-08-22T14:00:00Z", "status": "active" }
+  ]
+}
+```
+
+---
+
+### 4. `disconnect_platform`
+Revokes upstream platform authorization and deactivates stored credentials.
+
+**Tool Parameters:**
+```json
+{
+  "platform": "twitter | youtube | instagram"
+}
+```
+
+---
+
+## 5. OAuth 2.1 Authentication & User Flow
+
+The server implements RFC 7636 Authorization Code Flow with mandatory **PKCE S256**:
+
+```mermaid
+flowchart LR
+    User[User / AI] -->|1. Request Connect Link| Server[MCP Server]
+    Server -->|2. Generate PKCE Challenge| Browser[Web Browser]
+    Browser -->|3. User Grants Permissions| Social[Twitter / Google / Meta]
+    Social -->|4. Auth Code Redirect| Server
+    Server -->|5. Exchange Token & AES Encrypt| DB[(PostgreSQL Vault)]
+```
+
+1. **Connect Endpoint**: Navigate to `http://localhost:8080/auth/{platform}/connect` in your browser.
+2. **Permission Grant**: Approve the requested publishing and analytics scopes.
+3. **Encrypted Storage**: The server exchanges the one-time authorization code for long-lived OAuth tokens, encrypts them with **AES-256-GCM**, and saves them to the relational vault.
+
+---
+
+## 6. Security & Threat Mitigation
+
+| Threat Vector | Defense Mechanism | Empirical Verification |
 | :--- | :--- | :--- |
-| **Token Encryption** | AES-256-GCM authenticated encryption at rest with 96-bit unique nonces. | **100% Verified** in test suites |
-| **SSRF & DNS Rebinding** | Kernel-level `net.Dialer.Control` socket hook blocks private/metadata IPs at dial-time. | **48/48 payloads blocked (100%)** |
-| **Multi-Tenant IDOR** | Cryptographic session-to-actor context isolation (`database.GetActor`). | **110/110 probes blocked (0 leaks)** |
-| **SQLi & Path Traversal** | Pure parameterized queries ($1, $2) and strict path token confinement. | **85/85 payloads neutralized (100%)** |
-| **Secret Scrubbing** | Dual-layer regex & denylist log scrubber prevents credential leaks in telemetry. | **500/500 probes scrubbed (0 leaks)** |
-| **In-Transit Encryption** | Mandatory TLS 1.2+ with forward-secret AEAD cipher suites on real listeners. | **Verified via live network handshakes** |
-| **Dependency Call-Graph** | Pinned Go 1.26.6 runtime and patched standard library toolchain. | **`govulncheck`: 0 vulnerabilities** |
+| **SSRF & DNS Rebinding** | Kernel-level `net.Dialer.Control` socket hook inspects resolved IP during socket dial. Blocks cloud metadata (`169.254.169.254`), loopbacks, and RFC 1918 subnets. | **48/48 payloads blocked (100%)** |
+| **Token Theft at Rest** | AES-256-GCM authenticated encryption with 96-bit random nonces. Master key isolated out-of-band in secrets manager. | **100% Verified** in test suites |
+| **Multi-Tenant IDOR** | Cryptographic session context binding (`database.GetActor`). Queries enforce `WHERE user_id = $1`. | **110/110 probes blocked (0 leaks)** |
+| **SQL Injection** | Strict parameterization ($1, $2) across all PostgreSQL query builders. | **85/85 payloads neutralized (100%)** |
+| **Telemetry Leaks** | Dual-layer log scrubber masks access tokens, bearer headers, and secrets (`[REDACTED]`). | **500/500 probes scrubbed (0 leaks)** |
+| **Man-in-the-Middle** | Mandatory TLS 1.2+ listener with forward-secret AEAD cipher suites. Rejects SSLv3, TLS 1.0, TLS 1.1. | **Verified via live network handshakes** |
+| **Supply Chain Safety** | Pinned Go 1.26.6 runtime and audited dependency call-graph. | **`govulncheck`: 0 vulnerabilities** |
 
 ---
 
-## 📊 Production Deployment & Observability
+## 7. Production Deployment & Observability
 
-### Multi-Container Stack (Docker Compose)
-The production stack includes the core MCP server, PostgreSQL 16, Redis 7, Prometheus, and Grafana:
+### Multi-Container Stack Deployment
+Deploy the full multi-service stack (MCP App, PostgreSQL 16, Redis 7, Prometheus, and Grafana) with Docker Compose:
 
 ```bash
+# Launch multi-container stack
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-### Pre-Configured Monitoring
-- **Prometheus (`:8080/metrics`)**: Protected with Bearer Token authentication (`METRICS_BEARER_TOKEN`). Tracks request throughput, latency histograms ($p50, p90, p99$), rate-limit rejections, and retry queue depth.
-- **Grafana Dashboard (`:3000`)**: Auto-provisioned dashboard displaying real-time platform request rates, retry stream depth, and Dead-Letter Queue (DLQ) volume.
-- **Lightweight Healthcheck (`:8080/health`)**: Sanitized JSON endpoint returning zero internal connection strings or secrets.
+### Telemetry & Monitoring Infrastructure
+- **Prometheus Metrics (`:8080/metrics`)**: Bearer-token protected telemetry stream scraping request rates, latency histograms ($p50, p90, p99$), rate-limit blocks, and retry stream depth.
+- **Pre-Configured Grafana Dashboard (`:3000`)**: Auto-provisioned dashboard displaying live RPS by platform, retry stream backlog, and Dead-Letter Queue (DLQ) volume.
+- **Healthcheck (`:8080/health`)**: Sanitized JSON health status endpoint returning minimal operational metadata.
 
 ---
 
-## 📚 Documentation Suite
+## 8. Complete Documentation Hub
 
-All detailed technical and operational specifications are available in the repository root:
+Explore the full documentation suite in the repository root:
 
 - 📖 **[User Guide](USER_GUIDE.md)** — Step-by-step account onboarding, natural language prompts, and publishing workflows.
-- 🏗️ **[Enterprise Architecture](ARCHITECTURE.md)** — Distributed systems blueprint, publish sequence diagrams, and retry queue design.
+- 🏗️ **[Technical Architecture Specification](ARCHITECTURE.md)** — Distributed systems blueprint, publish sequence diagrams, and queue design.
 - 🛡️ **[Security Policy & Threat Model](SECURITY.md)** — Cryptographic standards, SSRF defenses, and vulnerability disclosure policy.
 - 🔬 **[Penetration Test Report](PEN_TEST_REPORT.md)** — Empirical security audit, fuzzing battery, and vulnerability scan logs.
 - 🚨 **[Incident Response Runbooks](INCIDENT_RESPONSE.md)** — Operational P0-P3 response procedures for on-call engineers.
 - 📜 **[Privacy Policy](PRIVACY_POLICY.md)** — Data collection limits, retention policies, and zero data-selling commitment.
-- ❓ **[Frequently Asked Questions (FAQ)](FAQ.md)** — Quotas, token lifetimes, rate limits, and enterprise support.
+- ❓ **[Frequently Asked Questions (FAQ)](FAQ.md)** — Quotas, token lifetimes, rate limits, and commercial licensing.
 
 ---
 
-## 📄 Commercial Licensing & Enterprise Purchasing
+## 9. Commercial Licensing & Purchasing
 
-This software is a **commercial proprietary product** and is **not open-source or free software**. Deployment, integration, or commercial usage requires a valid commercial license.
+This software is a **commercial proprietary product** and is **not open-source or free software**. Deployment, integration, or commercial usage requires a valid commercial license agreement.
 
-- **Purchase & Enterprise Inquiries**: `licensing@socialmcp.io`
+- **Commercial Inquiries & Purchasing**: `licensing@socialmcp.io`
 - **License Terms**: See [LICENSE](LICENSE) for full details.

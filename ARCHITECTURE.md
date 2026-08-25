@@ -1,19 +1,19 @@
-# Social Publishing MCP Server — Enterprise Technical Architecture
+# Social Publishing MCP Server — Technical Architecture Specification
 
 This specification details the distributed systems design, zero-trust security model, real-time request lifecycle, resilient asynchronous retry topology, and platform integration adapters of the **Social Publishing MCP Server**.
 
 ---
 
-## 1. Executive Technical Architecture
+## 1. System Architecture Blueprint
 
-The Social Publishing MCP Server is engineered for high-concurrency, multi-tenant enterprise workloads. It bridges AI assistants (Claude, ChatGPT, Gemini, custom autonomous agents) to external social networks through the **Model Context Protocol (MCP)** standard while enforcing strict cryptographic isolation, zero secret leakage, and kernel-level network guards.
+The Social Publishing MCP Server is engineered for high-concurrency, multi-tenant workloads. It bridges AI assistants (Claude, ChatGPT, Gemini, custom autonomous agents) to external social networks through the **Model Context Protocol (MCP)** standard while enforcing strict cryptographic isolation, zero secret leakage, and kernel-level network guards.
 
 ```mermaid
 flowchart TD
     subgraph ClientLayer["AI Assistants & MCP Clients"]
         Claude["Claude Desktop / Claude Web"]
         Agents["Autonomous Multi-Agent Swarms"]
-        GPT["ChatGPT Enterprise Connectors"]
+        GPT["ChatGPT Connectors"]
     end
 
     subgraph IngressGateway["Ingress & Edge Security Layer"]
@@ -109,7 +109,7 @@ sequenceDiagram
                 SocialAPI-->>Adapter: 429 Too Many Requests / 503 Service Unavailable
                 Adapter->>Stream: XADD publish_retry_stream (AES-256 Payload)
                 Stream-->>Adapter: Enqueued Job ID
-                Adapter-->>GW: Transient failure caught; queued for retry
+                Adapter-->>GW: Transient failure caught, enqueued for retry
                 GW-->>LLM: Result: Queued for automatic background retry
             end
         end
