@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "social-publish-mcp-server"
+    metrics_path: "/metrics"
+    scheme: "http"
+    authorization:
+      type: Bearer
+      credentials: "${METRICS_BEARER_TOKEN:-local_dev_metrics_token_prometheus_12345}"
+    static_configs:
+      - targets: ["app:8080"]
+        labels:
+          environment: "production"
+          service: "social-publish-mcp-server"

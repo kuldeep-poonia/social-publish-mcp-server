@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-mcp
+  labels:
+    app.kubernetes.io/name: social-publish-mcp-server
+    app.kubernetes.io/part-of: social-mcp

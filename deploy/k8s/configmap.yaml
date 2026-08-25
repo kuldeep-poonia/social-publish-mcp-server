@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: social-mcp-config
+  namespace: social-mcp
+data:
+  SERVER_PORT: "8080"
+  SERVER_HOST: "0.0.0.0"
+  ENVIRONMENT: "production"
+  POSTGRES_HOST: "social-mcp-postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "social_mcp_db"
+  POSTGRES_SSLMODE: "require"
+  REDIS_HOST: "social-mcp-redis"
+  REDIS_PORT: "6379"
+  RATELIMIT_FAIL_CLOSED: "true"
+  QUEUE_MAX_RETRIES: "5"
+  QUEUE_MAX_DELIVERY_ATTEMPTS: "5"
+  QUEUE_WORKERS: "4"
+  PUBLIC_BASE_URL: "https://mcp.yourdomain.com"
