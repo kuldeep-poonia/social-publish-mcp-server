@@ -4,8 +4,8 @@
 
 ## 1. General & Pricing
 
-### Q: Is the Social Publishing MCP Server free and open-source?
-**A:** Yes! The core server is 100% open-source under the **MIT License**. You can self-host it on your own infrastructure with zero licensing fees.
+### Q: Is the Social Publishing MCP Server free or open-source?
+**A:** **No.** The Social Publishing MCP Server is a **commercial proprietary product**. Deployment, hosting, or integrating it within your infrastructure requires an active commercial license or enterprise purchase agreement. For license acquisition and pricing, contact `licensing@socialmcp.io`.
 
 ### Q: Do I need paid API developer accounts for Twitter, YouTube, or Instagram?
 **A:**

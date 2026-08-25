@@ -55,7 +55,7 @@ Once connected, simply talk to your AI assistant using natural language.
 You can publish standalone text tweets or tweets with image attachments:
 
 > **Example Prompt:**
-> *"Publish a tweet saying: 'Excited to announce our new open-source MCP server release! 🚀 Check it out on GitHub.' and attach this image: https://example.com/assets/banner.jpg"*
+> *"Publish a tweet saying: 'Excited to announce our new enterprise Social Publishing MCP server! 🚀 Check out the documentation and features.' and attach this image: https://example.com/assets/banner.jpg"*
 
 **What happens under the hood:**
 - The server validates the image URL for safety.

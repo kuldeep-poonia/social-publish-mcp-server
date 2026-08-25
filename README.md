@@ -4,9 +4,9 @@
 [![MCP Specification](https://img.shields.io/badge/MCP-2024--11--05-8A2BE2?style=flat)](https://modelcontextprotocol.io)
 [![Security Standard](https://img.shields.io/badge/OWASP-API%20Top%2010%20Compliant-green)](SECURITY.md)
 [![Docker](https://img.shields.io/badge/Docker-Multi--Container%20Ready-2496ED?style=flat&logo=docker)](deploy/docker-compose.yml)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Commercial](https://img.shields.io/badge/License-Commercial%20%2F%20Proprietary-red.svg)](LICENSE)
 
-A production-grade, enterprise-hardened **Model Context Protocol (MCP)** server that enables AI assistants (Claude, ChatGPT connectors, Gemini, and custom agentic workflows) to securely publish media and fetch engagement analytics across **Twitter / X**, **YouTube**, and **Instagram** under strict, authenticated user consent.
+A commercial-grade, enterprise-hardened **Model Context Protocol (MCP)** server that enables AI assistants (Claude, ChatGPT connectors, Gemini, and custom agentic workflows) to securely publish media and fetch engagement analytics across **Twitter / X**, **YouTube**, and **Instagram** under strict, authenticated user consent.
 
 ---
 
@@ -18,6 +18,7 @@ A production-grade, enterprise-hardened **Model Context Protocol (MCP)** server 
 - [Security & Resilience](#-security--resilience)
 - [Observability & Telemetry](#-observability--telemetry)
 - [Documentation Index](#-documentation-index)
+- [Commercial Licensing](#-commercial-licensing--enterprise-purchasing)
 
 ---
 
@@ -97,13 +98,10 @@ The server exposes standard Model Context Protocol tools via Streamable HTTP and
 
 ## 🚀 Quick Start
 
-### 1. Run with Docker Compose (Recommended)
-Clone the repository and launch the full multi-container stack (MCP App, PostgreSQL 16, Redis 7, Prometheus, and Grafana):
+### 1. Run with Docker Compose
+Clone the repository and launch the multi-container stack (MCP App, PostgreSQL 16, Redis 7, Prometheus, and Grafana):
 
 ```bash
-git clone https://github.com/kuldeep-poonia/social-publish-mcp-server.git
-cd social-publish-mcp-server
-
 # Copy environment template
 cp .env.example .env
 
@@ -167,17 +165,19 @@ Add the following configuration to your `claude_desktop_config.json`:
 
 ## 📚 Documentation Index
 
-For complete operational and architectural guides, explore:
+For complete operational and integration guides, explore:
 - 📖 [User Guide](docs/USER_GUIDE.md) — Step-by-step account connection, post publishing, and analytics workflows.
-- 🏗️ [Architecture Deep-Dive](ARCHITECTURE.md) — System components, publish sequence diagrams, and retry queue design.
 - 🛡️ [Security Policy & Threat Model](SECURITY.md) — Threat model, cryptographic standards, and vulnerability reporting.
 - 🔬 [Penetration Test Report](PEN_TEST_REPORT.md) — Empirical security audit, fuzzing battery, and vulnerability scan results.
 - 📜 [Privacy Policy](PRIVACY_POLICY.md) — Data retention, user rights, and zero data-selling commitment.
-- ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) — Quota management, platform rate limits, and deployment FAQs.
+- ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) — Quota management, platform rate limits, and commercial licensing.
 - 🚨 [Incident Response Runbooks](docs/runbooks/incident_response.md) — Operational runbooks for on-call engineers (P0-P3).
-- 🏆 [Launch Readiness Certification](LAUNCH_READINESS_CERTIFICATION.md) — Formal 9-phase production verification matrix.
 
 ---
 
-## 📄 License
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for complete terms.
+## 📄 Commercial Licensing & Enterprise Purchasing
+
+This software is a **commercial proprietary product** and is **not open-source or free software**. Deployment, integration, or commercial usage requires a valid commercial license.
+
+- **Purchase & Enterprise Inquiries**: `licensing@socialmcp.io`
+- **License Terms**: See [LICENSE](LICENSE) for full details.

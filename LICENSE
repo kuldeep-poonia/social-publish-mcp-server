@@ -1,21 +1,27 @@
-MIT License
+COMMERCIAL PROPRIETARY SOFTWARE LICENSE
 
-Copyright (c) 2026 Kuldeep Poonia
+Copyright (c) 2026 Kuldeep Poonia. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+IMPORTANT: PLEASE READ THIS LICENSE AGREEMENT CAREFULLY. THIS SOFTWARE IS A COMMERCIAL, PROPRIETARY PRODUCT AND IS NOT OPEN SOURCE OR FREE SOFTWARE.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. GRANT OF LICENSE
+Subject to the terms of this Agreement and payment of the applicable commercial license fees, Kuldeep Poonia ("Licensor") grants to the authorized purchaser/licensee ("Licensee") a non-exclusive, non-transferable, revocable license to deploy and use the Social Publishing & Analytics MCP Server software ("Software") strictly within Licensee's organization or designated infrastructure.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. RESTRICTIONS
+Except as expressly authorized under a written commercial contract with Licensor, Licensee and any third parties shall NOT:
+a) Copy, distribute, publish, sublicense, rent, lease, or lend the Software or any portion thereof;
+b) Reverse engineer, decompile, disassemble, or derive source code or architectural designs from the Software;
+c) Modify, adapt, translate, or create derivative works based on the Software;
+d) Remove, alter, or obscure any proprietary notices, labels, or copyright markings on or within the Software;
+e) Offer the Software as a shared, public, or multi-tenant software-as-a-service (SaaS) to third parties without an Enterprise Commercial License.
+
+3. OWNERSHIP
+Licensor retains all right, title, and interest (including all intellectual property, copyright, trade secret, and patent rights) in and to the Software, its source code, architecture, schemas, and documentation. No title to or ownership of the Software is transferred to Licensee.
+
+4. COMMERCIAL INQUIRIES & PURCHASING
+To obtain a valid commercial license, purchase an enterprise deployment tier, or request commercial integration support, contact:
+- Commercial Inquiries & Licensing: licensing@socialmcp.io
+- Website: https://github.com/kuldeep-poonia/social-publish-mcp-server
+
+5. DISCLAIMER OF WARRANTY & LIMITATION OF LIABILITY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
