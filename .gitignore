@@ -11,6 +11,12 @@ docs-internal/
 *.crt
 /secrets/
 secrets/
+deploy/k8s/secret.yaml
+deploy/k8s/*-secret.yaml
+deploy/k8s/secrets/
+k8s/secret.yaml
+k8s/*-secret.yaml
+!deploy/k8s/secret.example.yaml
 
 # Raw media / video recordings (stored separately)
 videos/
