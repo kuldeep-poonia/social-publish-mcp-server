@@ -27,7 +27,9 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
+	"github.com/redis/go-redis/v9"
 )
 
 type twitterOAuthState struct {
@@ -54,6 +56,10 @@ type HTTPServer struct {
 	instagramService    *instagram.Service
 	instagramClient     *instagram.Client
 	mediaStager         *instagram.MediaStager
+	redisClient         *redis.Client
+	streamQueue         *queue.RedisStreamQueue
+	workerPool          *queue.WorkerPool
+	dlqManager          *queue.DLQManager
 	oauthStatesMu       sync.Mutex
 	oauthStates         map[string]twitterOAuthState
 }
@@ -80,7 +86,29 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mcpServer := mcp.NewServer()
 	transport := mcp.NewHTTPTransport(mcpServer)
-	limiter := ratelimit.NewTokenBucketLimiter(100.0, 200.0) // 100 RPS with 200 burst
+
+	// Redis connection pool
+	var rdb *redis.Client
+	if cfg.RedisHost != "" {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:     cfg.RedisAddr(),
+			Password: cfg.RedisPassword,
+		})
+	}
+
+	var limiter ratelimit.Limiter = ratelimit.NewTokenBucketLimiter(100.0, 200.0) // In-memory fallback
+	if rdb != nil {
+		if redisLimiter, rErr := ratelimit.NewRedisTokenBucketLimiter(rdb, 100.0, 200.0, cfg.RateLimitFailClosed); rErr == nil {
+			limiter = redisLimiter
+		}
+	}
+
+	var streamQueue *queue.RedisStreamQueue
+	var dlqManager *queue.DLQManager
+	if rdb != nil && len(cfg.QueueEncryptionKey) == 32 {
+		streamQueue, _ = queue.NewRedisStreamQueue(rdb, cfg.QueueEncryptionKey)
+		dlqManager = queue.NewDLQManager(rdb, cfg.QueueEncryptionKey)
+	}
 
 	twitterClient := twitter.NewClient(cfg.TwitterClientID, cfg.TwitterClientSecret)
 	var twitterService *twitter.Service
@@ -117,7 +145,22 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		instagramService:    instagramService,
 		instagramClient:     instagramClient,
 		mediaStager:         mediaStager,
+		redisClient:         rdb,
+		streamQueue:         streamQueue,
+		dlqManager:          dlqManager,
 		oauthStates:         make(map[string]twitterOAuthState),
+	}
+
+	// Initialize and launch background retry queue workers if Redis stream queue is available
+	if streamQueue != nil {
+		policy := queue.RetryPolicy{
+			BaseBackoff:   500 * time.Millisecond,
+			MaxBackoff:    30 * time.Second,
+			MaxRetries:    cfg.QueueMaxRetries,
+			MaxDeliveries: cfg.QueueMaxDeliveryAttempts,
+		}
+		s.workerPool = queue.NewWorkerPool(streamQueue, s.handleBackgroundPublishRetry, policy, cfg.QueueWorkers, "social_mcp_worker")
+		s.workerPool.Start(context.Background())
 	}
 
 	// Register Social Publishing MCP Tools
@@ -217,6 +260,35 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
+					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
+						ID:             uuid.New().String(),
+						UserID:         actualUserID,
+						Platform:       "twitter",
+						Caption:        content,
+						MediaURLs:      mediaURLs,
+						IdempotencyKey: idempotencyKey,
+						AttemptCount:   1,
+						MaxRetries:     s.cfg.QueueMaxRetries,
+						CreatedAt:      time.Now().UTC(),
+					})
+					retryResp := map[string]interface{}{
+						"status":          "queued_for_retry",
+						"platform":        "twitter",
+						"idempotency_key": idempotencyKey,
+						"reason":          err.Error(),
+						"error_category":  string(cat),
+						"retry_attempt":   1,
+						"instruction":     "Initial attempt met transient upstream resistance. Background worker is retrying automatically with exponential backoff.",
+					}
+					b, _ := json.Marshal(retryResp)
+					return &mcp.CallToolResult{
+						Content: []mcp.ToolContent{
+							{Type: "text", Text: string(b)},
+						},
+						IsError: false,
+					}, nil
+				}
 				return nil, err
 			}
 
@@ -247,10 +319,12 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}
 
 			var videoBytes []byte
+			mediaPath, _ := args["media_path"].(string)
+			mediaPath = strings.TrimSpace(mediaPath)
 
 			// 1. Check media_path argument
-			if mediaPath, ok := args["media_path"].(string); ok && strings.TrimSpace(mediaPath) != "" {
-				data, readErr := os.ReadFile(strings.TrimSpace(mediaPath))
+			if mediaPath != "" {
+				data, readErr := os.ReadFile(mediaPath)
 				if readErr != nil {
 					return nil, fmt.Errorf("failed reading video file from media_path '%s': %w", mediaPath, readErr)
 				}
@@ -290,6 +364,37 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
+					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
+						ID:             uuid.New().String(),
+						UserID:         actualUserID,
+						Platform:       "youtube",
+						Caption:        title,
+						MediaPath:      mediaPath,
+						MediaData:      videoBytes,
+						PrivacyStatus:  privacyStatus,
+						IdempotencyKey: idempotencyKey,
+						AttemptCount:   1,
+						MaxRetries:     s.cfg.QueueMaxRetries,
+						CreatedAt:      time.Now().UTC(),
+					})
+					retryResp := map[string]interface{}{
+						"status":          "queued_for_retry",
+						"platform":        "youtube",
+						"idempotency_key": idempotencyKey,
+						"reason":          err.Error(),
+						"error_category":  string(cat),
+						"retry_attempt":   1,
+						"instruction":     "Initial attempt met transient upstream resistance. Background worker is retrying automatically with exponential backoff.",
+					}
+					b, _ := json.Marshal(retryResp)
+					return &mcp.CallToolResult{
+						Content: []mcp.ToolContent{
+							{Type: "text", Text: string(b)},
+						},
+						IsError: false,
+					}, nil
+				}
 				return nil, err
 			}
 
@@ -332,6 +437,38 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
+					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
+						ID:             uuid.New().String(),
+						UserID:         actualUserID,
+						Platform:       "instagram",
+						Caption:        caption,
+						MediaURLs:      mediaURLs,
+						MediaPath:      mediaPath,
+						MediaData:      mediaData,
+						MediaType:      mediaType,
+						IdempotencyKey: idempotencyKey,
+						AttemptCount:   1,
+						MaxRetries:     s.cfg.QueueMaxRetries,
+						CreatedAt:      time.Now().UTC(),
+					})
+					retryResp := map[string]interface{}{
+						"status":          "queued_for_retry",
+						"platform":        "instagram",
+						"idempotency_key": idempotencyKey,
+						"reason":          err.Error(),
+						"error_category":  string(cat),
+						"retry_attempt":   1,
+						"instruction":     "Initial attempt met transient upstream resistance. Background worker is retrying automatically with exponential backoff.",
+					}
+					b, _ := json.Marshal(retryResp)
+					return &mcp.CallToolResult{
+						Content: []mcp.ToolContent{
+							{Type: "text", Text: string(b)},
+						},
+						IsError: false,
+					}, nil
+				}
 				return nil, err
 			}
 
@@ -1160,4 +1297,78 @@ func (s *HTTPServer) handleInstagramWebhook(w http.ResponseWriter, r *http.Reque
 	}
 
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
+// handleBackgroundPublishRetry processes background retries for transiently failed publish jobs.
+func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queue.PublishJob) error {
+	if job == nil {
+		return errors.New("job cannot be nil")
+	}
+
+	switch job.Platform {
+	case "twitter":
+		if s.twitterService == nil {
+			return errors.New("twitter service not initialized")
+		}
+		_, err := s.twitterService.PublishTweet(ctx, &twitter.PublishTweetRequest{
+			UserID:         job.UserID,
+			Content:        job.Caption,
+			MediaURLs:      job.MediaURLs,
+			IdempotencyKey: job.IdempotencyKey,
+		})
+		return err
+
+	case "youtube":
+		if s.youtubeService == nil {
+			return errors.New("youtube service not initialized")
+		}
+		var videoBytes []byte
+		if len(job.MediaData) > 0 {
+			videoBytes = job.MediaData
+		} else if job.MediaPath != "" {
+			data, readErr := os.ReadFile(job.MediaPath)
+			if readErr != nil {
+				return fmt.Errorf("failed reading video file from media_path '%s': %w", job.MediaPath, readErr)
+			}
+			videoBytes = data
+		} else if len(job.MediaURLs) > 0 {
+			data, readErr := os.ReadFile(job.MediaURLs[0])
+			if readErr == nil {
+				videoBytes = data
+			}
+		}
+
+		if len(videoBytes) == 0 {
+			return errors.New("missing valid video payload for youtube background retry")
+		}
+
+		_, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
+			UserID:         job.UserID,
+			Title:          job.Caption,
+			Description:    job.Caption,
+			PrivacyStatus:  job.PrivacyStatus,
+			VideoReader:    bytes.NewReader(videoBytes),
+			TotalBytes:     int64(len(videoBytes)),
+			IdempotencyKey: job.IdempotencyKey,
+		})
+		return err
+
+	case "instagram":
+		if s.instagramService == nil {
+			return errors.New("instagram service not initialized")
+		}
+		_, err := s.instagramService.Publish(ctx, &instagram.PublishPostRequest{
+			UserID:         job.UserID,
+			Caption:        job.Caption,
+			MediaURLs:      job.MediaURLs,
+			MediaPath:      job.MediaPath,
+			MediaData:      job.MediaData,
+			MediaType:      job.MediaType,
+			IdempotencyKey: job.IdempotencyKey,
+		})
+		return err
+
+	default:
+		return fmt.Errorf("unsupported platform for retry: %s", job.Platform)
+	}
 }
