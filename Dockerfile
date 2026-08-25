@@ -1,6 +1,6 @@
 # Multi-stage production build for Social Publishing MCP Server
-# Stage 1: Build binary with zero CGO dependencies
-FROM golang:1.25-alpine AS builder
+# Stage 1: Build binary with zero CGO dependencies on explicitly pinned patched Go release
+FROM golang:1.26.6-alpine AS builder
 
 WORKDIR /src
 
@@ -20,8 +20,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -o /bin/social-mcp-server ./cmd/server
 
-# Stage 2: Minimal, hardened, non-root runtime container
-FROM alpine:3.20
+# Stage 2: Minimal, hardened, non-root runtime container on pinned Alpine release
+FROM alpine:3.20.6
 
 # Install runtime security necessities
 RUN apk --no-cache add ca-certificates tzdata curl && \
