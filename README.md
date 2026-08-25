@@ -170,11 +170,12 @@ Add the following configuration to your `claude_desktop_config.json`:
 For complete operational and architectural guides, explore:
 - 📖 [User Guide](docs/USER_GUIDE.md) — Step-by-step account connection, post publishing, and analytics workflows.
 - 🏗️ [Architecture Deep-Dive](ARCHITECTURE.md) — System components, publish sequence diagrams, and retry queue design.
-- 🛡️ [Security Policy & Pen-Test Report](SECURITY.md) — Threat model, cryptographic standards, and vulnerability reporting.
+- 🛡️ [Security Policy & Threat Model](SECURITY.md) — Threat model, cryptographic standards, and vulnerability reporting.
+- 🔬 [Penetration Test Report](PEN_TEST_REPORT.md) — Empirical security audit, fuzzing battery, and vulnerability scan results.
 - 📜 [Privacy Policy](PRIVACY_POLICY.md) — Data retention, user rights, and zero data-selling commitment.
 - ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) — Quota management, platform rate limits, and deployment FAQs.
 - 🚨 [Incident Response Runbooks](docs/runbooks/incident_response.md) — Operational runbooks for on-call engineers (P0-P3).
-- 🏆 [Launch Readiness Certification](audit/launch_readiness_certification.md) — Formal production verification matrix.
+- 🏆 [Launch Readiness Certification](LAUNCH_READINESS_CERTIFICATION.md) — Formal 9-phase production verification matrix.
 
 ---
 
