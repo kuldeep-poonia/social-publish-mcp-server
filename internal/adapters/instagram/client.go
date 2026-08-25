@@ -350,9 +350,13 @@ func (c *Client) GetMediaInsights(ctx context.Context, mediaID, accessToken stri
 		switch metric.Name {
 		case "impressions":
 			metrics.Impressions = val
-		case "views", "plays":
+		case "views":
 			metrics.Plays = val
-			metrics.Impressions = val
+			if metrics.Impressions == 0 {
+				metrics.Impressions = val
+			}
+		case "plays":
+			metrics.Plays = val
 		case "reach":
 			metrics.Reach = val
 		case "likes":
