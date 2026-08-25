@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Publishing MCP Server — Autonomous Multi-Platform Publishing for AI Agents</title>
+  <meta name="description" content="Commercial-grade Model Context Protocol (MCP) server enabling Claude, ChatGPT, and custom AI agents to securely publish content and fetch analytics across Twitter/X, YouTube, and Instagram.">
+  <meta name="keywords" content="MCP, Model Context Protocol, Claude Desktop, Social Media Automation, Twitter API, YouTube Upload API, Instagram Graph API, AI Agent Tools">
+  <meta name="author" content="Kuldeep Poonia">
+
+  <!-- OpenGraph / Social Meta Tags -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Social Publishing MCP Server — Secure AI Publishing Gateway">
+  <meta property="og:description" content="Empower Claude, ChatGPT, and AI agents to publish media and fetch analytics with zero-trust AES-256-GCM token vaults and kernel-level SSRF defense.">
+  <meta property="og:url" content="https://kuldeep-poonia.github.io/social-publish-mcp-server/">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient Background Mesh -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Navigation Bar -->
+  <header class="navbar-wrapper">
+    <nav class="navbar container">
+      <a href="#" class="brand-logo">
+        <div class="logo-icon"><i class="fa-solid fa-cube"></i></div>
+        <div class="brand-text">Social <span>MCP</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Capabilities</a></li>
+        <li><a href="#simulator">Live Demo</a></li>
+        <li><a href="#platforms">Platforms</a></li>
+        <li><a href="#tools">MCP Tools</a></li>
+        <li><a href="#security">Zero-Trust</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank" class="btn btn-secondary btn-sm">
+          <i class="fa-brands fa-github"></i> <span>GitHub</span>
+        </a>
+        <a href="#pricing" class="btn btn-primary btn-sm">
+          <i class="fa-solid fa-key"></i> <span>Get License</span>
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section container">
+    <div class="hero-content">
+      <div class="badge-pill">
+        <span class="pulse-dot"></span>
+        <span class="badge-text">Model Context Protocol (MCP) • Production Edition</span>
+        <i class="fa-solid fa-arrow-right badge-arrow"></i>
+      </div>
+      
+      <h1 class="hero-title">
+        Give Your AI Assistants Hands to <span class="gradient-text">Publish & Grow</span> Across Social Media
+      </h1>
+      
+      <p class="hero-subtitle">
+        A secure, high-concurrency Model Context Protocol gateway in pure Go. Enables <strong>Claude Desktop</strong>, <strong>ChatGPT</strong>, and autonomous agents to publish tweets, upload YouTube videos, and launch Instagram Reels under cryptographic user consent.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="#pricing" class="btn btn-primary btn-lg">
+          <i class="fa-solid fa-bolt"></i> <span>Deploy Production Gateway</span>
+        </a>
+        <a href="#simulator" class="btn btn-secondary btn-lg">
+          <i class="fa-solid fa-terminal"></i> <span>Explore Interactive Demo</span>
+        </a>
+      </div>
+
+      <!-- Quick Metrics Ribbon -->
+      <div class="hero-stats-ribbon">
+        <div class="stat-item">
+          <div class="stat-value">3 Platforms</div>
+          <div class="stat-label">Twitter / X • YouTube • Instagram</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value">&lt; 18ms</div>
+          <div class="stat-label">Average P50 Request Latency</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value">AES-256-GCM</div>
+          <div class="stat-label">Zero-Trust Credential Vault</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-value">Kernel-Level</div>
+          <div class="stat-label">Socket IP-Pinning SSRF Defense</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive AI Terminal Simulator -->
+    <div class="simulator-wrapper" id="simulator">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-controls">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="terminal-title">
+            <i class="fa-solid fa-robot"></i> Claude Desktop with Social MCP Gateway
+          </div>
+          <div class="terminal-status">
+            <span class="status-indicator"></span> Connected: SSE Transport
+          </div>
+        </div>
+
+        <div class="terminal-body" id="terminal-body">
+          <!-- Terminal Conversation Stream -->
+          <div class="chat-message user-msg">
+            <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
+            <div class="msg-content">
+              <div class="msg-header">You</div>
+              <div class="msg-bubble">
+                Publish our new video to YouTube with title "Building Autonomous Go Agents", and cross-post a teaser tweet to Twitter with image attachment: <code>https://cdn.example.com/teaser.png</code>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-message ai-msg">
+            <div class="msg-avatar"><i class="fa-solid fa-sparkles"></i></div>
+            <div class="msg-content">
+              <div class="msg-header">Claude (via Social MCP Gateway)</div>
+              <div class="msg-bubble">
+                I'll handle both publishing actions securely through the Social Publishing MCP Server.
+
+                <!-- Tool Invocation 1: Twitter -->
+                <div class="mcp-tool-call">
+                  <div class="tool-call-header">
+                    <span class="tool-badge"><i class="fa-brands fa-x-twitter"></i> publish_post</span>
+                    <span class="tool-timer"><i class="fa-solid fa-bolt"></i> 14ms (Direct Dispatch)</span>
+                  </div>
+                  <div class="tool-json">
+                    <code>{"platform": "twitter", "content": "Autonomous Go Microservices live now! 🚀", "media_urls": ["https://cdn.example.com/teaser.png"]}</code>
+                  </div>
+                  <div class="tool-response success">
+                    <i class="fa-solid fa-circle-check"></i> Published Tweet ID: <strong>1894726190283741184</strong>
+                  </div>
+                </div>
+
+                <!-- Tool Invocation 2: YouTube -->
+                <div class="mcp-tool-call">
+                  <div class="tool-call-header">
+                    <span class="tool-badge yt"><i class="fa-brands fa-youtube"></i> publish_post</span>
+                    <span class="tool-timer"><i class="fa-solid fa-arrows-rotate"></i> 8MB Resumable Chunk Stream</span>
+                  </div>
+                  <div class="tool-json">
+                    <code>{"platform": "youtube", "title": "Building Autonomous Go Agents", "visibility": "public", "media_type": "VIDEO"}</code>
+                  </div>
+                  <div class="upload-progress-bar">
+                    <div class="progress-fill" style="width: 100%;"></div>
+                  </div>
+                  <div class="tool-response success">
+                    <i class="fa-solid fa-circle-check"></i> Uploaded Video ID: <strong>yt_v927401a8</strong> • Quota Reserved: 1,600 units
+                  </div>
+                </div>
+
+                Both posts are live! Would you like me to query real-time analytics once impressions start flowing?
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Interactive Toolbar -->
+        <div class="terminal-toolbar">
+          <span class="toolbar-label">Simulate Action:</span>
+          <button class="sim-btn active" data-action="twitter"><i class="fa-brands fa-twitter"></i> Tweet with Media</button>
+          <button class="sim-btn" data-action="youtube"><i class="fa-brands fa-youtube"></i> 8MB Chunk YouTube Upload</button>
+          <button class="sim-btn" data-action="instagram"><i class="fa-brands fa-instagram"></i> Instagram Reel & Transcode</button>
+          <button class="sim-btn" data-action="analytics"><i class="fa-solid fa-chart-line"></i> Fetch Multi-Platform Analytics</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Platform Cards Section -->
+  <section class="platforms-section container" id="platforms">
+    <div class="section-header text-center">
+      <div class="section-badge">Platform Integrations</div>
+      <h2 class="section-title">Engineered Specifically for Social Network APIs</h2>
+      <p class="section-subtitle">Deep, hardened integrations tailored to each platform's protocol constraints, rate limits, and media specifications.</p>
+    </div>
+
+    <div class="platforms-grid">
+      <!-- Twitter Card -->
+      <div class="platform-card twitter-card">
+        <div class="card-icon-wrapper">
+          <i class="fa-brands fa-x-twitter"></i>
+        </div>
+        <h3 class="card-title">Twitter / X (API v2)</h3>
+        <p class="card-desc">Full support for text tweets, multi-image attachments, and status updates compatible with Free, Basic, and Pro developer tiers.</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> Transactional idempotency locks preventing duplicate tweets on retries</li>
+          <li><i class="fa-solid fa-check"></i> Automatic chunked media uploading with dimension validation</li>
+          <li><i class="fa-solid fa-check"></i> Real-time impression, retweet, reply, and quote analytics</li>
+        </ul>
+        <div class="card-badge">OAuth 2.0 PKCE Enforced</div>
+      </div>
+
+      <!-- YouTube Card -->
+      <div class="platform-card youtube-card">
+        <div class="card-icon-wrapper">
+          <i class="fa-brands fa-youtube"></i>
+        </div>
+        <h3 class="card-title">YouTube (Data & Upload v3)</h3>
+        <p class="card-desc">Google Resumable Chunked Upload protocol streaming long-form videos and YouTube Shorts with minimal memory footprint.</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> 8MB streaming chunks with &lt; 1.0MB heap allocation delta</li>
+          <li><i class="fa-solid fa-check"></i> Resumes aborted uploads mid-stream with zero duplicate quota waste</li>
+          <li><i class="fa-solid fa-check"></i> Daily 10,000 quota unit tracker with automated reservation refunds</li>
+        </ul>
+        <div class="card-badge">Resumable Chunk Protocol</div>
+      </div>
+
+      <!-- Instagram Card -->
+      <div class="platform-card instagram-card">
+        <div class="card-icon-wrapper">
+          <i class="fa-brands fa-instagram"></i>
+        </div>
+        <h3 class="card-title">Instagram (Meta Graph v20.0)</h3>
+        <p class="card-desc">Professional Feed photo, carousel, and video Reel publishing with automated PNG-to-JPEG image format transcoding.</p>
+        <ul class="feature-list">
+          <li><i class="fa-solid fa-check"></i> Automatic PNG-to-JPEG conversion satisfying Meta aspect ratios</li>
+          <li><i class="fa-solid fa-check"></i> Container creation & asynchronous state polling state machine</li>
+          <li><i class="fa-solid fa-check"></i> Unified analytics: impressions, reach, likes, comments, shares, saves</li>
+        </ul>
+        <div class="card-badge">Meta Graph API v20.0</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security & Zero-Trust Section -->
+  <section class="security-section container" id="security">
+    <div class="section-header text-center">
+      <div class="section-badge security-badge">Zero-Trust Architecture</div>
+      <h2 class="section-title">Built for High Security & Strict Isolation</h2>
+      <p class="section-subtitle">LLMs never touch plaintext OAuth tokens. Every network socket, SQL query, and log line is hardened against adversarial attack vectors.</p>
+    </div>
+
+    <div class="security-grid">
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <h4>Kernel-Level Socket SSRF Guard</h4>
+        <p>Uses <code>net.Dialer.Control</code> OS hooks to verify destination IPs at dial-time, completely neutralizing DNS rebinding and TOCTOU metadata exploits.</p>
+      </div>
+
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-vault"></i></div>
+        <h4>AES-256-GCM Token Vault</h4>
+        <p>OAuth tokens encrypted at rest with unique 96-bit nonces. Master keys remain strictly out-of-band in secret managers, decoupled from database dumps.</p>
+      </div>
+
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-arrows-split-up-and-left"></i></div>
+        <h4>Multi-Tenant Actor Isolation</h4>
+        <p>Database queries evaluate cryptographic actor session contexts. Cross-user IDOR access attempts abort instantly with <code>ErrUnauthorizedAccess</code>.</p>
+      </div>
+
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <h4>Redis 7 Stream Retry Queue</h4>
+        <p>Sync-first execution with automated exponential backoff retries on transient 429/503 errors and a 5-attempt poison message DLQ quarantine cap.</p>
+      </div>
+
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-mask"></i></div>
+        <h4>Dual-Layer Secret Scrubbing</h4>
+        <p>Regex signature and key denylist filters automatically replace all bearer tokens, authorization headers, and secrets with <code>[REDACTED]</code> in telemetry.</p>
+      </div>
+
+      <div class="security-card">
+        <div class="sec-icon"><i class="fa-solid fa-lock"></i></div>
+        <h4>TLS 1.2+ Forward-Secret AEAD</h4>
+        <p>Network listeners strictly enforce TLS 1.2/1.3 with forward-secret AEAD cipher suites, actively rejecting obsolete SSLv3, TLS 1.0, and TLS 1.1 handshakes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- MCP Tools Interactive Catalog -->
+  <section class="tools-section container" id="tools">
+    <div class="section-header text-center">
+      <div class="section-badge">Protocol Specification</div>
+      <h2 class="section-title">Model Context Protocol (MCP) Tool Suite</h2>
+      <p class="section-subtitle">Seamless JSON-RPC 2.0 interface compatible with Claude Desktop, Cursor, Gemini CLI, and custom agents.</p>
+    </div>
+
+    <div class="tools-container">
+      <div class="tool-tabs">
+        <button class="tool-tab-btn active" data-tool="publish">
+          <i class="fa-solid fa-paper-plane"></i>
+          <div>
+            <strong>publish_post</strong>
+            <small>Publish text, media & videos</small>
+          </div>
+        </button>
+        <button class="tool-tab-btn" data-tool="analytics">
+          <i class="fa-solid fa-chart-pie"></i>
+          <div>
+            <strong>get_post_analytics</strong>
+            <small>Inspect live engagement telemetry</small>
+          </div>
+        </button>
+        <button class="tool-tab-btn" data-tool="list">
+          <i class="fa-solid fa-list-check"></i>
+          <div>
+            <strong>list_connections</strong>
+            <small>View authenticated accounts</small>
+          </div>
+        </button>
+        <button class="tool-tab-btn" data-tool="disconnect">
+          <i class="fa-solid fa-link-slash"></i>
+          <div>
+            <strong>disconnect_platform</strong>
+            <small>Revoke upstream credentials</small>
+          </div>
+        </button>
+      </div>
+
+      <div class="tool-display-panel">
+        <div class="panel-header">
+          <span class="panel-title" id="tool-name-display"><i class="fa-solid fa-code"></i> Tool Schema: publish_post</span>
+          <button class="copy-btn" id="copy-tool-schema"><i class="fa-regular fa-copy"></i> Copy Schema</button>
+        </div>
+        <pre class="code-block"><code id="tool-code-content">// publish_post JSON-RPC 2.0 Schema
+{
+  "name": "publish_post",
+  "description": "Publishes text updates, photo attachments, or video content to Twitter/X, YouTube, or Instagram.",
+  "parameters": {
+    "type": "object",
+    "required": ["platform", "content"],
+    "properties": {
+      "platform": { "type": "string", "enum": ["twitter", "youtube", "instagram"] },
+      "content": { "type": "string", "description": "Text caption or description" },
+      "media_urls": { "type": "array", "items": { "type": "string" }, "description": "Public media URLs to attach" },
+      "title": { "type": "string", "description": "Required for YouTube video uploads" },
+      "visibility": { "type": "string", "enum": ["public", "unlisted", "private"], "default": "public" },
+      "media_type": { "type": "string", "enum": ["IMAGE", "VIDEO", "REEL", "CAROUSEL"] }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Claude Desktop Setup in 30 Seconds -->
+  <section class="setup-section container" id="setup">
+    <div class="setup-card">
+      <div class="setup-content">
+        <div class="section-badge">1-Minute Quickstart</div>
+        <h2 class="setup-title">Connect to Claude Desktop</h2>
+        <p class="setup-desc">Add the following block to your <code>claude_desktop_config.json</code> to instantly empower Claude with social publishing capabilities.</p>
+        
+        <div class="code-copy-container">
+          <pre class="code-block"><code>{
+  "mcpServers": {
+    "social-publisher": {
+      "command": "docker",
+      "args": ["exec", "-i", "social_mcp_app", "/app/social-mcp-server"]
+    }
+  }
+}</code></pre>
+          <button class="btn btn-primary btn-sm copy-config-btn" id="copy-claude-config">
+            <i class="fa-regular fa-copy"></i> Copy Configuration
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing & Commercial License -->
+  <section class="pricing-section container" id="pricing">
+    <div class="section-header text-center">
+      <div class="section-badge">Commercial Licensing</div>
+      <h2 class="section-title">Transparent Commercial Pricing</h2>
+      <p class="section-subtitle">Deploy on your private infrastructure. Zero recurring cloud markups. Direct perpetual commercial licenses.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- Solo Tier -->
+      <div class="pricing-card">
+        <div class="tier-name">Solo Creator</div>
+        <div class="tier-price">$49 <span>/ one-time</span></div>
+        <p class="tier-desc">Ideal for individual creators, builders, and developers automating personal social channels.</p>
+        <ul class="pricing-features">
+          <li><i class="fa-solid fa-check"></i> Twitter/X, YouTube & Instagram Adapters</li>
+          <li><i class="fa-solid fa-check"></i> Pre-Compiled Docker Container Binaries</li>
+          <li><i class="fa-solid fa-check"></i> Claude Desktop & Cursor Integration</li>
+          <li><i class="fa-solid fa-check"></i> AES-256-GCM Token Vault</li>
+          <li><i class="fa-solid fa-check"></i> Standard Documentation & User Guide</li>
+        </ul>
+        <a href="mailto:licensing@socialmcp.io?subject=Solo%20Creator%20License%20Purchase" class="btn btn-secondary btn-block">Purchase Solo License</a>
+      </div>
+
+      <!-- Pro Business Tier (Featured) -->
+      <div class="pricing-card featured-tier">
+        <div class="popular-badge">Most Popular</div>
+        <div class="tier-name">Pro Business</div>
+        <div class="tier-price">$149 <span>/ perpetual</span></div>
+        <p class="tier-desc">For growing agencies, SaaS startups, and marketing automation teams running multi-account fleets.</p>
+        <ul class="pricing-features">
+          <li><i class="fa-solid fa-check"></i> Everything in Solo Creator Tier</li>
+          <li><i class="fa-solid fa-check"></i> Multi-Tenant Actor Session Context Isolation</li>
+          <li><i class="fa-solid fa-check"></i> Redis 7 Stream Retry Queue & DLQ</li>
+          <li><i class="fa-solid fa-check"></i> Prometheus & Grafana Production Dashboards</li>
+          <li><i class="fa-solid fa-check"></i> Priority Email & Implementation Support</li>
+          <li><i class="fa-solid fa-check"></i> Free Minor Version Updates for 1 Year</li>
+        </ul>
+        <a href="mailto:licensing@socialmcp.io?subject=Pro%20Business%20License%20Purchase" class="btn btn-primary btn-block">Get Pro Business License</a>
+      </div>
+
+      <!-- Enterprise Tier -->
+      <div class="pricing-card">
+        <div class="tier-name">Enterprise Custom</div>
+        <div class="tier-price">Custom</div>
+        <p class="tier-desc">For high-scale enterprises requiring custom platform adapters, SLA guarantees, and full source code audits.</p>
+        <ul class="pricing-features">
+          <li><i class="fa-solid fa-check"></i> Full Source Code Access & Modification Rights</li>
+          <li><i class="fa-solid fa-check"></i> Custom Social Platform Adapter Development</li>
+          <li><i class="fa-solid fa-check"></i> Kubernetes Multi-Cluster Helm Deployment</li>
+          <li><i class="fa-solid fa-check"></i> 99.99% Architecture SLA & Dedicated Slack</li>
+          <li><i class="fa-solid fa-check"></i> Custom Secret Manager Integration (Vault/AWS)</li>
+        </ul>
+        <a href="mailto:licensing@socialmcp.io?subject=Enterprise%20Commercial%20Inquiry" class="btn btn-secondary btn-block">Contact Enterprise Sales</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer-wrapper">
+    <div class="container footer-content">
+      <div class="footer-brand">
+        <div class="brand-logo">
+          <div class="logo-icon"><i class="fa-solid fa-cube"></i></div>
+          <div class="brand-text">Social <span>MCP</span></div>
+        </div>
+        <p class="footer-tagline">Commercial-grade Model Context Protocol server enabling autonomous AI publishing across Twitter, YouTube, and Instagram.</p>
+        <div class="system-status">
+          <span class="status-dot"></span> All Systems Operational • MCP Specification 2024-11-05
+        </div>
+      </div>
+
+      <div class="footer-links-grid">
+        <div class="footer-col">
+          <h5>Documentation</h5>
+          <ul>
+            <li><a href="USER_GUIDE.md">User Guide</a></li>
+            <li><a href="ARCHITECTURE.md">Architecture Specification</a></li>
+            <li><a href="FAQ.md">Frequently Asked Questions</a></li>
+            <li><a href="INCIDENT_RESPONSE.md">Incident Response Runbooks</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Security & Compliance</h5>
+          <ul>
+            <li><a href="SECURITY.md">Security Policy & Threat Model</a></li>
+            <li><a href="PEN_TEST_REPORT.md">Penetration Test Report</a></li>
+            <li><a href="PRIVACY_POLICY.md">Privacy Policy</a></li>
+            <li><a href="LICENSE">Commercial License Terms</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Contact & Inquiries</h5>
+          <ul>
+            <li><a href="mailto:licensing@socialmcp.io">Commercial: licensing@socialmcp.io</a></li>
+            <li><a href="mailto:security@socialmcp.io">Security: security@socialmcp.io</a></li>
+            <li><a href="mailto:privacy@socialmcp.io">Privacy: privacy@socialmcp.io</a></li>
+            <li><a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank">GitHub Repository</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom container">
+      <p>© 2026 Kuldeep Poonia. All rights reserved. Commercial Proprietary Product.</p>
+      <p>Built with pure Go 1.26.6, PostgreSQL 16 & Redis 7.</p>
+    </div>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
