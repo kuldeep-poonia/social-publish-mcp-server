@@ -171,7 +171,7 @@ For complete operational and integration guides, explore:
 - 🔬 [Penetration Test Report](PEN_TEST_REPORT.md) — Empirical security audit, fuzzing battery, and vulnerability scan results.
 - 📜 [Privacy Policy](PRIVACY_POLICY.md) — Data retention, user rights, and zero data-selling commitment.
 - ❓ [Frequently Asked Questions (FAQ)](docs/FAQ.md) — Quota management, platform rate limits, and commercial licensing.
-- 🚨 [Incident Response Runbooks](docs/runbooks/incident_response.md) — Operational runbooks for on-call engineers (P0-P3).
+- 🚨 [Incident Response Runbooks](docs/INCIDENT_RESPONSE.md) — Operational runbooks for on-call engineers (P0-P3).
 
 ---
 
