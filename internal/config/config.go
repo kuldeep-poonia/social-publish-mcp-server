@@ -3,6 +3,8 @@ package config
 
 import (
 	"bufio"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -31,8 +33,15 @@ type Config struct {
 	RedisPassword string
 
 	// Security & Cryptography
-	TokenEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM
+	TokenEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM (OAuth Vault)
+	QueueEncryptionKey []byte // Exactly 32 bytes for AES-256-GCM (Queue Payload Security)
 	JWTSigningSecret   []byte // Min 32 bytes for HMAC-SHA256
+
+	// Queue & Reliability Engine
+	QueueMaxRetries          int  // Maximum retry attempts for transient errors (default: 5)
+	QueueMaxDeliveryAttempts int  // Maximum worker deliveries before poison-message DLQ diversion (default: 5)
+	QueueWorkers             int  // Number of concurrent queue worker goroutines (default: 4)
+	RateLimitFailClosed      bool // Fails closed (blocks) if Redis unreachable (default: true)
 
 	// Social Platform OAuth Credentials
 	TwitterClientID        string
@@ -54,29 +63,33 @@ func LoadConfig() (*Config, error) {
 	loadDotEnv(".env", "../.env", "../../.env")
 
 	cfg := &Config{
-		ServerPort:             getEnvAsInt("SERVER_PORT", 8080),
-		ServerHost:             getEnv("SERVER_HOST", "0.0.0.0"),
-		Environment:            getEnv("ENVIRONMENT", "development"),
-		PostgresHost:           getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:           getEnvAsInt("POSTGRES_PORT", 5432),
-		PostgresUser:           getEnv("POSTGRES_USER", "postgres"),
-		PostgresPassword:       getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
-		PostgresDB:             getEnv("POSTGRES_DB", "social_mcp_db"),
-		PostgresSSLMode:        getEnv("POSTGRES_SSLMODE", "disable"),
-		RedisHost:              getEnv("REDIS_HOST", "localhost"),
-		RedisPort:              getEnvAsInt("REDIS_PORT", 6379),
-		RedisPassword:          getEnv("REDIS_PASSWORD", ""),
-		TwitterClientID:        getEnv("TWITTER_CLIENT_ID", ""),
-		TwitterClientSecret:    getEnv("TWITTER_CLIENT_SECRET", ""),
-		TwitterRedirectURI:     getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/auth/twitter/callback"),
-		YouTubeClientID:        getEnv("YOUTUBE_CLIENT_ID", ""),
-		YouTubeClientSecret:    getEnv("YOUTUBE_CLIENT_SECRET", ""),
-		YouTubeRedirectURI:     getEnv("YOUTUBE_REDIRECT_URI", "http://localhost:8080/auth/youtube/callback"),
-		InstagramClientID:      getEnv("INSTAGRAM_CLIENT_ID", ""),
-		InstagramClientSecret:  getEnv("INSTAGRAM_CLIENT_SECRET", ""),
-		InstagramRedirectURI:   getEnv("INSTAGRAM_REDIRECT_URI", "http://localhost:8080/auth/instagram/callback"),
-		InstagramWebhookSecret: getEnv("INSTAGRAM_WEBHOOK_SECRET", ""),
-		PublicBaseURL:          getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		ServerPort:               getEnvAsInt("SERVER_PORT", 8080),
+		ServerHost:               getEnv("SERVER_HOST", "0.0.0.0"),
+		Environment:              getEnv("ENVIRONMENT", "development"),
+		PostgresHost:             getEnv("POSTGRES_HOST", "localhost"),
+		PostgresPort:             getEnvAsInt("POSTGRES_PORT", 5432),
+		PostgresUser:             getEnv("POSTGRES_USER", "postgres"),
+		PostgresPassword:         getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
+		PostgresDB:               getEnv("POSTGRES_DB", "social_mcp_db"),
+		PostgresSSLMode:          getEnv("POSTGRES_SSLMODE", "disable"),
+		RedisHost:                getEnv("REDIS_HOST", "localhost"),
+		RedisPort:                getEnvAsInt("REDIS_PORT", 6379),
+		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
+		QueueMaxRetries:          getEnvAsInt("QUEUE_MAX_RETRIES", 5),
+		QueueMaxDeliveryAttempts: getEnvAsInt("QUEUE_MAX_DELIVERY_ATTEMPTS", 5),
+		QueueWorkers:             getEnvAsInt("QUEUE_WORKERS", 4),
+		RateLimitFailClosed:      getEnvAsBool("RATELIMIT_FAIL_CLOSED", true),
+		TwitterClientID:          getEnv("TWITTER_CLIENT_ID", ""),
+		TwitterClientSecret:      getEnv("TWITTER_CLIENT_SECRET", ""),
+		TwitterRedirectURI:       getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/auth/twitter/callback"),
+		YouTubeClientID:          getEnv("YOUTUBE_CLIENT_ID", ""),
+		YouTubeClientSecret:      getEnv("YOUTUBE_CLIENT_SECRET", ""),
+		YouTubeRedirectURI:       getEnv("YOUTUBE_REDIRECT_URI", "http://localhost:8080/auth/youtube/callback"),
+		InstagramClientID:        getEnv("INSTAGRAM_CLIENT_ID", ""),
+		InstagramClientSecret:    getEnv("INSTAGRAM_CLIENT_SECRET", ""),
+		InstagramRedirectURI:     getEnv("INSTAGRAM_REDIRECT_URI", "http://localhost:8080/auth/instagram/callback"),
+		InstagramWebhookSecret:   getEnv("INSTAGRAM_WEBHOOK_SECRET", ""),
+		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
 	}
 
 	// Validate and decode Token Encryption Key
@@ -98,6 +111,20 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("TOKEN_ENCRYPTION_KEY must be exactly 32 bytes (64 hex characters) for AES-256, got %d bytes", len(decodedKey))
 	}
 	cfg.TokenEncryptionKey = decodedKey
+
+	// Validate or derive dedicated Queue Payload Encryption Key (Defense-in-depth separation)
+	rawQueueKeyHex := os.Getenv("QUEUE_ENCRYPTION_KEY")
+	if rawQueueKeyHex != "" {
+		decQueueKey, qErr := hex.DecodeString(rawQueueKeyHex)
+		if qErr != nil || len(decQueueKey) != 32 {
+			return nil, fmt.Errorf("QUEUE_ENCRYPTION_KEY must be exactly 32 bytes hex-encoded: %w", qErr)
+		}
+		cfg.QueueEncryptionKey = decQueueKey
+	} else {
+		// Cryptographically derive separate isolated 32-byte key from TokenEncryptionKey using domain separation
+		derivedKey := deriveQueueKey(cfg.TokenEncryptionKey)
+		cfg.QueueEncryptionKey = derivedKey
+	}
 
 	// Validate JWT Signing Secret
 	jwtSecret := os.Getenv("JWT_SIGNING_SECRET")
@@ -171,4 +198,22 @@ func loadDotEnv(filenames ...string) {
 		_ = file.Close()
 		return
 	}
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	valStr := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if valStr == "" {
+		return fallback
+	}
+	return valStr == "true" || valStr == "1" || valStr == "yes"
+}
+
+// deriveQueueKey derives a cryptographically isolated 32-byte key for queue encryption using HMAC-SHA256.
+func deriveQueueKey(tokenKey []byte) []byte {
+	h := hmac.New(sha256.New, tokenKey)
+	h.Write([]byte("social_mcp_queue_payload_v1_domain_separation"))
+	sum := h.Sum(nil)
+	key := make([]byte, 32)
+	copy(key, sum[:32])
+	return key
 }
