@@ -19,7 +19,8 @@ type Config struct {
 	ServerHost  string
 	Environment string
 
-	// Database (Postgres)
+	// Database (Postgres) - Dual Support: Single URL or Separate Fields
+	DatabaseURL      string // Single connection URL (e.g., DATABASE_URL on Render / Supabase / Neon)
 	PostgresHost     string
 	PostgresPort     int
 	PostgresUser     string
@@ -27,7 +28,8 @@ type Config struct {
 	PostgresDB       string
 	PostgresSSLMode  string
 
-	// Redis
+	// Redis - Dual Support: Single URL or Separate Fields
+	RedisURL      string // Single connection URL (e.g., REDIS_URL on Render / Upstash)
 	RedisHost     string
 	RedisPort     int
 	RedisPassword string
@@ -67,12 +69,14 @@ func LoadConfig() (*Config, error) {
 		ServerPort:               getEnvAsInt("SERVER_PORT", 8080),
 		ServerHost:               getEnv("SERVER_HOST", "0.0.0.0"),
 		Environment:              getEnv("ENVIRONMENT", "development"),
+		DatabaseURL:              getEnv("DATABASE_URL", ""),
 		PostgresHost:             getEnv("POSTGRES_HOST", "localhost"),
 		PostgresPort:             getEnvAsInt("POSTGRES_PORT", 5432),
 		PostgresUser:             getEnv("POSTGRES_USER", "postgres"),
 		PostgresPassword:         getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
 		PostgresDB:               getEnv("POSTGRES_DB", "social_mcp_db"),
 		PostgresSSLMode:          getEnv("POSTGRES_SSLMODE", "disable"),
+		RedisURL:                 getEnv("REDIS_URL", ""),
 		RedisHost:                getEnv("REDIS_HOST", "localhost"),
 		RedisPort:                getEnvAsInt("REDIS_PORT", 6379),
 		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
@@ -157,7 +161,11 @@ func LoadConfig() (*Config, error) {
 }
 
 // PostgresDSN returns the standard PostgreSQL connection string for the configured parameters.
+// If DATABASE_URL is provided, it is returned directly for seamless cloud deployments (Render, Supabase, Neon).
 func (c *Config) PostgresDSN() string {
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		c.PostgresHost, c.PostgresPort, c.PostgresUser, c.PostgresPassword, c.PostgresDB, c.PostgresSSLMode)
 }

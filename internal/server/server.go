@@ -91,9 +91,13 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mcpServer := mcp.NewServer()
 	transport := mcp.NewHTTPTransport(mcpServer)
 
-	// Redis connection pool
+	// Redis connection pool (supports single REDIS_URL or host/port)
 	var rdb *redis.Client
-	if cfg.RedisHost != "" {
+	if cfg.RedisURL != "" {
+		if opt, err := redis.ParseURL(cfg.RedisURL); err == nil {
+			rdb = redis.NewClient(opt)
+		}
+	} else if cfg.RedisHost != "" {
 		rdb = redis.NewClient(&redis.Options{
 			Addr:     cfg.RedisAddr(),
 			Password: cfg.RedisPassword,
