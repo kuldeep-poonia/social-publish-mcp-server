@@ -56,6 +56,18 @@ func run(ctx context.Context, cfg *config.Config) error {
 		log.Printf("Warning: Postgres not ready at startup (%v). Running in decoupled mode.", err)
 	} else {
 		log.Println("PostgreSQL connection pool established and verified.")
+
+		// Automated Migration-on-Startup Engine
+		log.Println("Verifying database schema migrations...")
+		applied, err := database.RunMigrations(ctx, db)
+		if err != nil {
+			return fmt.Errorf("fatal: database migration failed on startup: %w", err)
+		}
+		if applied > 0 {
+			log.Printf("Database schema update completed: %d new migration(s) applied successfully.", applied)
+		} else {
+			log.Println("Database schema is up to date (0 pending migrations).")
+		}
 	}
 
 	log.Printf("Twitter Integration Status: ClientID configured: %t, RedirectURI: %s", cfg.TwitterClientID != "", cfg.TwitterRedirectURI)

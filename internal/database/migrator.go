@@ -5,14 +5,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/migrations"
 )
 
 // Migration represents a single versioned migration step.
@@ -47,11 +48,15 @@ func (m *Migrator) EnsureMigrationTable(ctx context.Context) error {
 	return nil
 }
 
-// LoadMigrations reads and parses all .up.sql and .down.sql files from the specified migrations directory.
-func LoadMigrations(dirPath string) ([]Migration, error) {
-	entries, err := os.ReadDir(dirPath)
+// LoadFS reads and parses all .up.sql and .down.sql files from an abstract filesystem (e.g. embed.FS or os.DirFS).
+func LoadFS(fsys fs.FS, dirPath string) ([]Migration, error) {
+	if dirPath == "" {
+		dirPath = "."
+	}
+
+	entries, err := fs.ReadDir(fsys, dirPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read migrations directory %s: %w", dirPath, err)
+		return nil, fmt.Errorf("failed to read migrations from filesystem at %s: %w", dirPath, err)
 	}
 
 	migrationsMap := make(map[int]*Migration)
@@ -75,9 +80,14 @@ func LoadMigrations(dirPath string) ([]Migration, error) {
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(dirPath, filename))
+		filePath := filename
+		if dirPath != "." && dirPath != "" {
+			filePath = dirPath + "/" + filename
+		}
+
+		content, err := fs.ReadFile(fsys, filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read migration file %s: %w", filename, err)
+			return nil, fmt.Errorf("failed to read migration file %s: %w", filePath, err)
 		}
 
 		if _, exists := migrationsMap[version]; !exists {
@@ -99,6 +109,7 @@ func LoadMigrations(dirPath string) ([]Migration, error) {
 		migrations = append(migrations, *m)
 	}
 
+	// Order Guarantee: Strictly sort migrations ascending by version
 	sort.Slice(migrations, func(i, j int) bool {
 		return migrations[i].Version < migrations[j].Version
 	})
@@ -106,7 +117,25 @@ func LoadMigrations(dirPath string) ([]Migration, error) {
 	return migrations, nil
 }
 
+// LoadMigrations reads and parses all .up.sql and .down.sql files from the specified disk directory.
+func LoadMigrations(dirPath string) ([]Migration, error) {
+	return LoadFS(os.DirFS(dirPath), ".")
+}
+
+// RunMigrations executes all pending embedded migrations on startup.
+// Returns the count of newly applied migrations, or a descriptive error if execution fails.
+func RunMigrations(ctx context.Context, db *sql.DB) (int, error) {
+	migList, err := LoadFS(migrations.FS, ".")
+	if err != nil {
+		return 0, fmt.Errorf("failed loading embedded migrations: %w", err)
+	}
+
+	migrator := NewMigrator(db)
+	return migrator.Up(ctx, migList)
+}
+
 // Up applies all pending migrations in ascending order.
+// Enforces strict transaction isolation per migration and fail-fast semantics.
 func (m *Migrator) Up(ctx context.Context, migrations []Migration) (int, error) {
 	if err := m.EnsureMigrationTable(ctx); err != nil {
 		return 0, err
@@ -119,6 +148,7 @@ func (m *Migrator) Up(ctx context.Context, migrations []Migration) (int, error) 
 
 	appliedCount := 0
 	for _, mig := range migrations {
+		// Idempotency: skip already applied migrations
 		if appliedMap[mig.Version] {
 			continue
 		}
