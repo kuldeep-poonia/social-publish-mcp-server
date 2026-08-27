@@ -621,9 +621,17 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			userID = "test_user_1"
 		}
 
+		getConnectURL := func(plt, uid string) string {
+			baseURL := strings.TrimRight(s.cfg.PublicBaseURL, "/")
+			if baseURL == "" {
+				baseURL = fmt.Sprintf("http://localhost:%d", s.cfg.ServerPort)
+			}
+			return fmt.Sprintf("%s/auth/%s/connect?user_id=%s", baseURL, plt, uid)
+		}
+
 		switch platform {
 		case "twitter":
-			connectURL := fmt.Sprintf("http://localhost:%d/auth/twitter/connect?user_id=%s", s.cfg.ServerPort, userID)
+			connectURL := getConnectURL("twitter", userID)
 			payload := map[string]string{
 				"platform":    "twitter",
 				"connect_url": connectURL,
@@ -639,7 +647,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}, nil
 
 		case "youtube":
-			connectURL := fmt.Sprintf("http://localhost:%d/auth/youtube/connect?user_id=%s", s.cfg.ServerPort, userID)
+			connectURL := getConnectURL("youtube", userID)
 			payload := map[string]string{
 				"platform":    "youtube",
 				"connect_url": connectURL,
@@ -655,7 +663,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}, nil
 
 		case "instagram":
-			connectURL := fmt.Sprintf("http://localhost:%d/auth/instagram/connect?user_id=%s", s.cfg.ServerPort, userID)
+			connectURL := getConnectURL("instagram", userID)
 			payload := map[string]string{
 				"platform":    "instagram",
 				"connect_url": connectURL,
