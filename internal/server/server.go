@@ -77,13 +77,18 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	allowedRedirects := []string{
 		"http://localhost:8080/callback",
 		"http://127.0.0.1:8080/callback",
-		"http://localhost:8080/auth/twitter/callback",
-		"http://localhost:8080/auth/callback/twitter",
-		"http://localhost:8080/auth/youtube/callback",
-		"http://localhost:8080/auth/callback/youtube",
-		"http://localhost:8080/auth/instagram/callback",
-		"http://localhost:8080/auth/callback/instagram",
+		"https://social-mcp.duckdns.org/auth/twitter/callback",
+		"https://social-mcp.duckdns.org/auth/callback/twitter",
+		"https://social-mcp.duckdns.org/auth/youtube/callback",
+		"https://social-mcp.duckdns.org/auth/callback/youtube",
+		"https://social-mcp.duckdns.org/auth/instagram/callback",
+		"https://social-mcp.duckdns.org/auth/callback/instagram",
 		"claude://oauth/callback",
+		"https://claude.ai/api/mcp/auth_callback",
+		"https://claude.ai/oauth/callback",
+		"https://claude.ai/api/auth/callback",
+		"https://claude.ai",
+		"*",
 	}
 	_ = oauthServer.RegisterClient("mcp_client_desktop", "", "MCP Desktop Client", allowedRedirects)
 	_ = oauthServer.RegisterClient("claude_desktop", "", "Claude Desktop Client", allowedRedirects)
@@ -1064,10 +1069,7 @@ func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request
 
 	callbackURL := strings.TrimSpace(s.cfg.TwitterRedirectURI)
 	if callbackURL == "" {
-		callbackURL = fmt.Sprintf("http://%s:%d/auth/twitter/callback", s.cfg.ServerHost, s.cfg.ServerPort)
-		if s.cfg.ServerHost == "0.0.0.0" {
-			callbackURL = fmt.Sprintf("http://localhost:%d/auth/twitter/callback", s.cfg.ServerPort)
-		}
+		callbackURL = fmt.Sprintf("%s/auth/twitter/callback", s.getBaseURL(r))
 	}
 
 	// Save state mapping
@@ -1216,10 +1218,7 @@ func (s *HTTPServer) handleYouTubeConnect(w http.ResponseWriter, r *http.Request
 
 	callbackURL := strings.TrimSpace(s.cfg.YouTubeRedirectURI)
 	if callbackURL == "" {
-		callbackURL = fmt.Sprintf("http://%s:%d/auth/youtube/callback", s.cfg.ServerHost, s.cfg.ServerPort)
-		if s.cfg.ServerHost == "0.0.0.0" {
-			callbackURL = fmt.Sprintf("http://localhost:%d/auth/youtube/callback", s.cfg.ServerPort)
-		}
+		callbackURL = fmt.Sprintf("%s/auth/youtube/callback", s.getBaseURL(r))
 	}
 
 	s.oauthStatesMu.Lock()
@@ -1337,10 +1336,7 @@ func (s *HTTPServer) handleInstagramConnect(w http.ResponseWriter, r *http.Reque
 
 	callbackURL := strings.TrimSpace(s.cfg.InstagramRedirectURI)
 	if callbackURL == "" {
-		callbackURL = fmt.Sprintf("http://%s:%d/auth/instagram/callback", s.cfg.ServerHost, s.cfg.ServerPort)
-		if s.cfg.ServerHost == "0.0.0.0" {
-			callbackURL = fmt.Sprintf("http://localhost:%d/auth/instagram/callback", s.cfg.ServerPort)
-		}
+		callbackURL = fmt.Sprintf("%s/auth/instagram/callback", s.getBaseURL(r))
 	}
 
 	s.oauthStatesMu.Lock()
