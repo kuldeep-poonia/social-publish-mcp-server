@@ -58,6 +58,13 @@ func (t *HTTPTransport) HandleDirectRPC(w http.ResponseWriter, r *http.Request) 
 
 // HandleSSE establishes a persistent Server-Sent Events stream with the client (e.g. Claude Desktop).
 func (t *HTTPTransport) HandleSSE(w http.ResponseWriter, r *http.Request) {
+	// If client sends POST to /mcp/sse (Streamable HTTP JSON-RPC initialization), handle it directly
+	if r.Method == http.MethodPost {
+		log.Printf("[MCP SSE -> Direct RPC] Received POST on /mcp/sse, dispatching to direct JSON-RPC")
+		t.HandleDirectRPC(w, r)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		log.Printf("[MCP SSE] REJECTED: Streaming unsupported by client: %s", r.RemoteAddr)
