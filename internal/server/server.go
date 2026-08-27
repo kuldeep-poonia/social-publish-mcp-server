@@ -269,6 +269,45 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	return s
 }
 
+func (s *HTTPServer) isAuthOrExpiredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return errors.Is(err, instagram.ErrPlatformNotConnected) ||
+		errors.Is(err, instagram.ErrReauthenticationRequired) ||
+		strings.Contains(msg, "expired") ||
+		strings.Contains(msg, "no active") ||
+		strings.Contains(msg, "unauthorized") ||
+		strings.Contains(msg, "reauthentication") ||
+		strings.Contains(msg, "not connected") ||
+		strings.Contains(msg, "connection not found") ||
+		strings.Contains(msg, "please connect")
+}
+
+func (s *HTTPServer) makeAuthRequiredToolResult(platform, userID string, rawErr error) *mcp.CallToolResult {
+	baseURL := strings.TrimRight(s.cfg.PublicBaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://social-mcp.duckdns.org"
+	}
+	connectURL := fmt.Sprintf("%s/auth/%s/connect?user_id=%s", baseURL, platform, userID)
+	payload := map[string]interface{}{
+		"status":      "action_required",
+		"error_type":  "reauthentication_required",
+		"platform":    platform,
+		"message":     fmt.Sprintf("Your %s account is not connected or the login session has expired.", platform),
+		"connect_url": connectURL,
+		"instruction": fmt.Sprintf("IMPORTANT FOR AI: You MUST tell the user to click this exact link to connect their %s account: [Click Here to Connect %s](%s) — Once they authorize, retry the publish/insights request.", strings.Title(platform), strings.Title(platform), connectURL),
+	}
+	b, _ := json.Marshal(payload)
+	return &mcp.CallToolResult{
+		Content: []mcp.ToolContent{
+			{Type: "text", Text: string(b)},
+		},
+		IsError: false,
+	}
+}
+
 func (s *HTTPServer) registerMCPToolHandlers() {
 	publishHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
 		actor := database.GetActor(ctx)
@@ -317,6 +356,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("twitter", actualUserID, err), nil
+				}
 				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
 					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
 						ID:             uuid.New().String(),
@@ -374,24 +416,18 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			if privacyStatus == "" {
 				privacyStatus = "public"
 			}
+			mediaPath, _ := args["media_path"].(string)
 
 			var videoBytes []byte
-			mediaPath, _ := args["media_path"].(string)
-			mediaPath = strings.TrimSpace(mediaPath)
-
-			// 1. Check media_path argument
-			if mediaPath != "" {
-				data, readErr := os.ReadFile(mediaPath)
-				if readErr != nil {
-					return nil, fmt.Errorf("failed reading video file from media_path '%s': %w", mediaPath, readErr)
+			if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
+				decoded, decErr := base64.StdEncoding.DecodeString(rawData)
+				if decErr != nil {
+					return nil, fmt.Errorf("invalid base64 encoding in media_data: %w", decErr)
 				}
-				videoBytes = data
-			}
-
-			// 2. Check media_urls if pointing to local file path or remote URL
-			if len(videoBytes) == 0 && len(mediaURLs) > 0 {
+				videoBytes = decoded
+			} else if len(mediaURLs) > 0 && mediaURLs[0] != "" {
 				if strings.HasPrefix(strings.ToLower(mediaURLs[0]), "http://") || strings.HasPrefix(strings.ToLower(mediaURLs[0]), "https://") {
-					fetchedBytes, _, fetchErr := security.FetchMediaWithSSRFProtection(ctx, mediaURLs[0], 500*1024*1024) // 500MB max
+					fetchedBytes, _, fetchErr := security.FetchMediaWithSSRFProtection(ctx, mediaURLs[0], 500*1024*1024)
 					if fetchErr != nil {
 						return nil, fmt.Errorf("failed fetching remote video URL with SSRF protection: %w", fetchErr)
 					}
@@ -402,21 +438,16 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 						videoBytes = data
 					}
 				}
-			}
-
-			// 3. Check base64-encoded media_data
-			if len(videoBytes) == 0 {
-				if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
-					decoded, decErr := base64.StdEncoding.DecodeString(rawData)
-					if decErr != nil {
-						return nil, fmt.Errorf("invalid base64 encoding in media_data: %w", decErr)
-					}
-					videoBytes = decoded
+			} else if mediaPath != "" {
+				readBytes, readErr := os.ReadFile(mediaPath)
+				if readErr != nil {
+					return nil, fmt.Errorf("failed reading local media file: %w", readErr)
 				}
+				videoBytes = readBytes
 			}
 
 			if len(videoBytes) == 0 {
-				return nil, errors.New("youtube video publishing requires a valid video file: please provide 'media_path' (path to video file), 'media_urls', or 'media_data' (base64)")
+				return nil, errors.New("missing valid video media (must provide media_urls, media_data, or media_path)")
 			}
 
 			resp, err := s.youtubeService.PublishVideo(ctx, &youtube.PublishVideoRequest{
@@ -429,6 +460,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("youtube", actualUserID, err), nil
+				}
 				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
 					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
 						ID:             uuid.New().String(),
@@ -502,6 +536,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("instagram", actualUserID, err), nil
+				}
 				if isTransient, cat := queue.ClassifyError(err); isTransient && s.streamQueue != nil {
 					_ = s.streamQueue.Enqueue(ctx, &queue.PublishJob{
 						ID:             uuid.New().String(),
@@ -632,6 +669,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 
 			metrics, err := s.instagramService.GetAnalytics(ctx, actualUserID, postID)
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("instagram", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed retrieving Instagram insights: %w", err)
 			}
 
@@ -747,12 +787,18 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		case "instagram":
 			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "instagram")
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("instagram", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed retrieving Instagram connection: %w (please connect Instagram via connect_platform tool first)", err)
 			}
 
 			// Retrieve linked IG User ID
 			igAccount, pageAccessToken, accErr := s.instagramClient.GetInstagramBusinessAccount(ctx, string(accessBytes))
 			if accErr != nil || igAccount == nil {
+				if s.isAuthOrExpiredError(accErr) {
+					return s.makeAuthRequiredToolResult("instagram", actualUserID, accErr), nil
+				}
 				return nil, fmt.Errorf("failed retrieving Instagram business account: %v", accErr)
 			}
 			igUserID := igAccount.ID
@@ -763,6 +809,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 
 			insights, err := s.instagramClient.GetAggregatedAccountInsights(ctx, igUserID, tokenToUse, period)
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("instagram", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed fetching Instagram account insights: %w", err)
 			}
 
@@ -777,6 +826,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		case "youtube":
 			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("youtube", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed retrieving YouTube connection: %w (please connect YouTube via connect_platform tool first)", err)
 			}
 
@@ -788,6 +840,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				}
 			}
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("youtube", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed fetching YouTube channel insights: %w", err)
 			}
 
@@ -802,6 +857,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		case "twitter":
 			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "twitter")
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("twitter", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed retrieving Twitter connection: %w (please connect Twitter via connect_platform tool first)", err)
 			}
 
@@ -813,6 +871,9 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				}
 			}
 			if err != nil {
+				if s.isAuthOrExpiredError(err) {
+					return s.makeAuthRequiredToolResult("twitter", actualUserID, err), nil
+				}
 				return nil, fmt.Errorf("failed fetching Twitter account insights: %w", err)
 			}
 
