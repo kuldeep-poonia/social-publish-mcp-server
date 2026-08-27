@@ -1062,9 +1062,17 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		actualUserID := claims.UserID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
 		// Inject ActorContext for auditing
 		ctx := database.WithActor(r.Context(), database.ActorContext{
-			ActorID:   claims.UserID,
+			ActorID:   actualUserID,
 			IPAddress: extractClientIP(r),
 		})
 

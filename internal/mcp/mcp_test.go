@@ -137,7 +137,7 @@ func TestMCP_CrossClientInteroperability(t *testing.T) {
 				t.Fatalf("Client 2 reading SSE endpoint failed: %v", err)
 			}
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "data: /mcp/messages?sessionId=") {
+			if strings.HasPrefix(line, "data: ") && strings.Contains(line, "sessionId=") {
 				sessionURI = strings.TrimPrefix(line, "data: ")
 				break
 			}
@@ -145,6 +145,11 @@ func TestMCP_CrossClientInteroperability(t *testing.T) {
 
 		if sessionURI == "" {
 			t.Fatal("Client 2 failed to receive SSE endpoint URI with sessionId")
+		}
+
+		postURL := sessionURI
+		if strings.HasPrefix(sessionURI, "/") {
+			postURL = ts.URL + sessionURI
 		}
 
 		// Send initialize message via POST /mcp/messages?sessionId=...
@@ -161,7 +166,7 @@ func TestMCP_CrossClientInteroperability(t *testing.T) {
 			},
 		}
 		initBytes, _ := json.Marshal(initMsg)
-		postResp, err := http.Post(ts.URL+sessionURI, "application/json", bytes.NewReader(initBytes))
+		postResp, err := http.Post(postURL, "application/json", bytes.NewReader(initBytes))
 		if err != nil {
 			t.Fatalf("Client 2 POST initialize message failed: %v", err)
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,11 +73,23 @@ func (t *HTTPTransport) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Determine absolute endpoint URL
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" && !strings.Contains(r.Host, "duckdns.org") && !strings.Contains(r.Host, "onrender.com") && !strings.Contains(r.Host, ".org") && !strings.Contains(r.Host, ".com") {
+		scheme = "http"
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	endpointURI := fmt.Sprintf("%s://%s/mcp/messages?sessionId=%s", scheme, host, sessionID)
 
 	// Send endpoint event with session URI per MCP spec
-	endpointURI := fmt.Sprintf("/mcp/messages?sessionId=%s", sessionID)
 	fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", endpointURI)
 	flusher.Flush()
 
@@ -89,10 +102,12 @@ func (t *HTTPTransport) HandleSSE(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(resp)
-			if err == nil {
-				fmt.Fprintf(w, "event: message\ndata: %s\n\n", string(data))
-				flusher.Flush()
+			if resp != nil {
+				data, err := json.Marshal(resp)
+				if err == nil {
+					fmt.Fprintf(w, "event: message\ndata: %s\n\n", string(data))
+					flusher.Flush()
+				}
 			}
 		case <-time.After(15 * time.Second):
 			// Keepalive heartbeat
@@ -104,6 +119,15 @@ func (t *HTTPTransport) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 // HandleMessages receives POST messages for an active SSE session and dispatches them.
 func (t *HTTPTransport) HandleMessages(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
 		return
@@ -133,6 +157,13 @@ func (t *HTTPTransport) HandleMessages(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	resp := t.server.HandleRequest(ctx, body)
+
+	// If request was a notification (no response needed), accept immediately
+	if resp == nil {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		return
+	}
 
 	// Send response through the SSE channel
 	select {

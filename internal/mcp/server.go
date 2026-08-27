@@ -192,13 +192,9 @@ func (s *Server) HandleRequest(ctx context.Context, rawReq []byte) *JSONRPCRespo
 			},
 		}
 
-	case "notifications/initialized":
-		// Standard notification response (no result required)
-		return &JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  map[string]interface{}{"status": "acknowledged"},
-		}
+	case "notifications/initialized", "notifications/cancelled":
+		// Standard JSON-RPC notification (no response should be sent back to client)
+		return nil
 
 	case "tools/list":
 		s.mu.RLock()
