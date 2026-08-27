@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -20,10 +19,16 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/server"
 )
 
-// AppVersion represents the current version of the server.
-const AppVersion = "0.1.0"
+// Version and AppVersion represent the current version of the server (set by ldflags).
+var (
+	version    = "0.1.0"
+	AppVersion = "0.1.0"
+)
 
 func main() {
+	if version != "" && version != "0.1.0" {
+		AppVersion = version
+	}
 	log.Printf("Starting Social Publishing & Analytics MCP Server v%s", AppVersion)
 
 	cfg, err := config.LoadConfig()
