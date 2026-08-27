@@ -24,7 +24,7 @@
       --bg-light: #fbfbfd;
       --bg-secondary: #f5f5f7;
       --bg-card: #ffffff;
-      --bg-glass: rgba(255, 255, 255, 0.88);
+      --bg-glass: rgba(255, 255, 255, 0.90);
       
       --border-light: rgba(0, 0, 0, 0.07);
       --border-subtle: #e5e5ea;
@@ -200,7 +200,7 @@
 
     /* Hero Section */
     .hero-section {
-      padding: 130px 24px 70px;
+      padding: 130px 24px 60px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -210,7 +210,7 @@
 
     .hero-container {
       max-width: 880px;
-      margin: 0 auto 40px;
+      margin: 0 auto 30px;
     }
 
     .pill-announcement {
@@ -298,183 +298,218 @@
       transform: translateY(-2px);
     }
 
-    /* Live Studio Interactive Demo */
-    .demo-window-container {
-      width: 100%;
-      max-width: 1000px;
+    /* Live 1-Click Connect Hub */
+    .connect-hub-section {
+      padding: 60px 24px;
+      background: var(--bg-light);
+      border-top: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1040px;
       margin: 0 auto;
     }
 
-    .demo-window {
+    .hub-card {
       background: #ffffff;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      overflow: hidden;
-      text-align: left;
+      padding: 28px 24px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.25s var(--ease-apple);
     }
 
-    .window-header {
-      background: var(--bg-secondary);
-      padding: 14px 20px;
+    .hub-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .hub-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-subtle);
+      justify-content: center;
+      font-size: 1.6rem;
+      margin-bottom: 16px;
     }
 
-    .window-controls {
-      display: flex;
-      gap: 7px;
+    .hub-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 6px;
     }
 
-    .control-dot {
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-    }
-    .control-dot.close { background: #ff5f56; }
-    .control-dot.min { background: #ffbd2e; }
-    .control-dot.max { background: #27c93f; }
-
-    .window-title {
-      font-size: 0.82rem;
-      font-weight: 600;
+    .hub-desc {
+      font-size: 0.85rem;
       color: var(--text-secondary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .window-endpoint {
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      background: #fff;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-    }
-
-    .window-body {
-      padding: 24px;
-      background: #ffffff;
-    }
-
-    .demo-chips {
-      display: flex;
-      gap: 8px;
       margin-bottom: 20px;
-      flex-wrap: wrap;
+      line-height: 1.5;
     }
 
-    .demo-chip {
-      background: var(--bg-light);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 7px 14px;
-      border-radius: var(--radius-capsule);
-      cursor: pointer;
+    .btn-connect-hub {
+      width: 100%;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: var(--radius-capsule);
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
       transition: all 0.2s var(--ease-apple);
     }
 
-    .demo-chip.active, .demo-chip:hover {
-      background: #000;
-      color: #fff;
-      border-color: #000;
+    .btn-connect-hub.ig { background: #e1306c; color: #fff; }
+    .btn-connect-hub.ig:hover { background: #c1275b; }
+    .btn-connect-hub.x { background: #000; color: #fff; }
+    .btn-connect-hub.x:hover { background: #2a2a2e; }
+    .btn-connect-hub.yt { background: #ff0000; color: #fff; }
+    .btn-connect-hub.yt:hover { background: #d90000; }
+
+    /* Web Studio Direct Publisher */
+    .studio-section {
+      padding: 80px 24px;
     }
 
-    .chat-layout {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .chat-bubble {
-      border-radius: var(--radius-md);
-      padding: 16px 20px;
-      font-size: 0.92rem;
-      line-height: 1.6;
-    }
-
-    .chat-bubble.user {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
-      align-self: flex-start;
-      width: 100%;
-    }
-
-    .chat-bubble.ai {
+    .studio-box {
+      max-width: 900px;
+      margin: 0 auto;
       background: #ffffff;
       border: 1px solid var(--border-subtle);
-      box-shadow: var(--shadow-sm);
-      width: 100%;
+      border-radius: var(--radius-xl);
+      padding: 36px;
+      box-shadow: var(--shadow-lg);
     }
 
-    .execution-card {
-      background: var(--bg-light);
+    .studio-header {
+      margin-bottom: 24px;
+    }
+
+    .studio-header h3 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .studio-header p {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+    }
+
+    .studio-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-main);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .form-input, .form-textarea, .form-select {
+      width: 100%;
+      padding: 12px 16px;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
-      padding: 14px 16px;
-      margin: 12px 0 8px;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+      color: var(--text-main);
+      background: var(--bg-light);
+      outline: none;
+      transition: border-color 0.2s ease;
     }
 
-    .exec-header {
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--apple-blue);
+      background: #fff;
+    }
+
+    .preset-chips {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
+      gap: 8px;
+      margin-top: 6px;
+      flex-wrap: wrap;
     }
 
-    .platform-pill {
+    .preset-chip {
       font-size: 0.75rem;
-      font-weight: 700;
-      font-family: var(--font-mono);
-      padding: 3px 8px;
-      border-radius: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      padding: 4px 10px;
+      border-radius: var(--radius-capsule);
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .preset-chip:hover {
+      background: #e5e5ea;
+      color: var(--text-main);
+    }
+
+    .btn-publish-live {
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 14px 28px;
+      border-radius: var(--radius-capsule);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s var(--ease-apple);
     }
 
-    .platform-pill.x { background: rgba(0, 0, 0, 0.08); color: #000; }
-    .platform-pill.yt { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
-    .platform-pill.ig { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
-
-    .exec-metric {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
+    .btn-publish-live:hover {
+      background: #2c2c2e;
+      transform: translateY(-2px);
     }
 
-    .progress-bar-track {
-      width: 100%;
-      height: 4px;
-      background: var(--border-subtle);
-      border-radius: 99px;
-      overflow: hidden;
-      margin: 8px 0;
+    .publish-result-box {
+      margin-top: 20px;
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      display: none;
+      font-size: 0.9rem;
     }
 
-    .progress-bar-val {
-      height: 100%;
-      background: #34c759;
-      width: 100%;
-      transition: width 0.4s ease;
+    .publish-result-box.success {
+      background: rgba(52, 199, 89, 0.1);
+      border: 1px solid #34c759;
+      color: #1b5e20;
+      display: block;
     }
 
-    .exec-output-text {
-      font-size: 0.82rem;
-      color: #28a745;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 500;
+    .publish-result-box.error {
+      background: rgba(255, 59, 48, 0.1);
+      border: 1px solid #ff3b30;
+      color: #b71c1c;
+      display: block;
     }
 
     /* Section Headings */
@@ -597,159 +632,52 @@
       font-size: 0.8rem;
     }
 
-    /* Integration Section */
-    .integration-box {
-      background: #ffffff;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-xl);
-      padding: 40px;
-      box-shadow: var(--shadow-md);
+    /* Visual User Guide Steps */
+    .guide-tabs-wrapper {
+      max-width: 960px;
+      margin: 0 auto;
     }
 
-    .integration-tabs {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 12px;
+    .guide-steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 30px;
     }
 
-    .int-tab-btn {
-      background: transparent;
-      border: none;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 6px 14px;
-      border-radius: var(--radius-capsule);
-      transition: all 0.2s var(--ease-apple);
-    }
-
-    .int-tab-btn.active {
-      background: var(--bg-secondary);
-      color: var(--text-main);
-    }
-
-    .code-container {
-      position: relative;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 20px;
-      overflow-x: auto;
-    }
-
-    .code-container pre {
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-      color: var(--text-main);
-      line-height: 1.6;
-    }
-
-    .btn-copy-code {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      background: #000;
-      color: #fff;
-      border: none;
-      font-size: 0.78rem;
-      font-weight: 600;
-      padding: 6px 14px;
-      border-radius: var(--radius-capsule);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s var(--ease-apple);
-    }
-
-    .btn-copy-code:hover {
-      background: #333;
-    }
-
-    /* Security Audit Metrics Table */
-    .audit-table-wrapper {
+    .step-card-box {
       background: #ffffff;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
-      overflow: hidden;
+      padding: 30px 24px;
       box-shadow: var(--shadow-sm);
+      position: relative;
     }
 
-    .audit-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.9rem;
-    }
-
-    .audit-table th {
-      background: var(--bg-secondary);
-      padding: 14px 20px;
-      font-weight: 700;
-      color: var(--text-main);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .audit-table td {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border-light);
-      color: var(--text-secondary);
-    }
-
-    .audit-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .badge-compliant {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: rgba(52, 199, 89, 0.12);
-      color: #28a745;
-      font-weight: 700;
-      font-size: 0.75rem;
-      padding: 4px 10px;
-      border-radius: var(--radius-capsule);
-    }
-
-    /* FAQ Accordion */
-    .faq-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-
-    .faq-item {
-      background: #ffffff;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 24px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .faq-question {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--text-main);
-      margin-bottom: 10px;
+    .step-number {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #000;
+      color: #fff;
       display: flex;
-      align-items: flex-start;
-      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 800;
+      margin-bottom: 16px;
     }
 
-    .faq-question i {
-      color: var(--apple-blue);
-      margin-top: 3px;
-      font-size: 0.95rem;
+    .step-card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
     }
 
-    .faq-answer {
-      font-size: 0.9rem;
+    .step-card-desc {
+      font-size: 0.88rem;
       color: var(--text-secondary);
-      line-height: 1.6;
+      line-height: 1.55;
     }
 
     /* Pricing Section */
@@ -977,7 +905,7 @@
 
     @media (max-width: 900px) {
       .hero-title { font-size: 2.8rem; }
-      .cards-grid-3, .pricing-grid, .faq-grid, .footer-grid { grid-template-columns: 1fr; }
+      .cards-grid-3, .pricing-grid, .hub-grid, .guide-steps-grid, .footer-grid { grid-template-columns: 1fr; }
       .nav-menu { display: none; }
     }
   </style>
@@ -1001,12 +929,10 @@
       </a>
 
       <nav class="nav-menu">
+        <a href="#connect-hub">Connect Accounts</a>
+        <a href="#web-studio">Web Studio</a>
+        <a href="#user-guide">User Guide</a>
         <a href="#capabilities">Capabilities</a>
-        <a href="#demo">Live Demo</a>
-        <a href="#integration">Integration</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#security">Security Audit</a>
-        <a href="#faq">FAQ</a>
         <a href="#pricing">Licensing</a>
       </nav>
 
@@ -1014,13 +940,13 @@
         <a href="https://social-mcp.duckdns.org/health" target="_blank" class="nav-status-badge">
           <span class="pulse-dot"></span> Gateway Live
         </a>
-        <a href="#integration" class="nav-btn-primary">Connect Agent</a>
+        <a href="#connect-hub" class="nav-btn-primary">Connect Account</a>
       </div>
     </div>
   </header>
 
-  <!-- Hero Section -->
   <main>
+    <!-- Hero Section -->
     <section class="hero-section">
       <div class="container hero-container">
         <div class="pill-announcement">
@@ -1029,118 +955,159 @@
         </div>
 
         <h1 class="hero-title">
-          The Secure Social Publishing Gateway <br>
-          <span class="hero-subtitle-dim">Engineered for AI Assistants.</span>
+          The Social Publishing Gateway <br>
+          <span class="hero-subtitle-dim">Built for Humans & AI Assistants.</span>
         </h1>
 
         <p class="hero-description">
-          Empower Claude Desktop, Cursor, and autonomous AI swarms to draft, schedule, publish, and analyze content across Twitter/X, YouTube, and Instagram with zero-trust credential isolation.
+          Connect your Instagram, Twitter/X, and YouTube accounts in 1 click. Publish posts directly from this web page or through Claude Desktop and AI agents.
         </p>
 
         <div class="hero-cta-group">
-          <a href="#demo" class="btn-apple-black">
-            <i class="fa-solid fa-play"></i> Launch Live Simulator
+          <a href="#connect-hub" class="btn-apple-black">
+            <i class="fa-solid fa-link"></i> Connect Accounts (1-Click)
           </a>
-          <a href="#integration" class="btn-apple-outline">
-            <i class="fa-solid fa-bolt"></i> 60-Second Setup
+          <a href="#web-studio" class="btn-apple-outline">
+            <i class="fa-solid fa-paper-plane"></i> Publish Test Post Now
           </a>
-          <a href="https://social-mcp.duckdns.org/health" target="_blank" class="btn-apple-outline">
-            <i class="fa-solid fa-heart-pulse"></i> Health Status
+          <a href="#user-guide" class="btn-apple-outline">
+            <i class="fa-solid fa-book-open"></i> Read User Guide
           </a>
         </div>
       </div>
+    </section>
 
-      <!-- Interactive Apple Studio Demo Window -->
-      <div class="container demo-window-container" id="demo">
-        <div class="demo-window">
-          <div class="window-header">
-            <div class="window-controls">
-              <span class="control-dot close"></span>
-              <span class="control-dot min"></span>
-              <span class="control-dot max"></span>
+    <!-- 1-Click Social Account Connection Hub -->
+    <section class="connect-hub-section" id="connect-hub">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-eyebrow">Account Hub</span>
+          <h2 class="section-title">1-Click Account Connection.</h2>
+          <p class="section-desc">Click any platform button below to securely link your social media account to the gateway.</p>
+        </div>
+
+        <div class="hub-grid">
+          <!-- Instagram Card -->
+          <div class="hub-card">
+            <div class="hub-icon" style="background: rgba(225, 48, 108, 0.1); color: #e1306c;">
+              <i class="fa-brands fa-instagram"></i>
             </div>
-            <div class="window-title">
-              <i class="fa-solid fa-microchip"></i> Model Context Protocol Studio Simulator
-            </div>
-            <div class="window-endpoint">
-              POST /mcp/rpc • SSE Active
-            </div>
+            <h3 class="hub-title">Instagram</h3>
+            <p class="hub-desc">Publish Feed Photos, 10-Item Carousels, and 9:16 vertical Reels with auto-transcoding.</p>
+            <a href="https://social-mcp.duckdns.org/auth/instagram/connect?user_id=kuldeep" target="_blank" class="btn-connect-hub ig">
+              <i class="fa-brands fa-instagram"></i> Connect Instagram
+            </a>
           </div>
 
-          <div class="window-body">
-            <!-- Scenario Selector Chips -->
-            <div class="demo-chips">
-              <button class="demo-chip active" onclick="switchScenario('yt_x', this)">
-                <i class="fa-brands fa-youtube" style="color: #ff3b30;"></i> YouTube Video + Twitter Announcement
-              </button>
-              <button class="demo-chip" onclick="switchScenario('ig_reel', this)">
-                <i class="fa-brands fa-instagram" style="color: #ec4899;"></i> Instagram Reel & Transcode
-              </button>
-              <button class="demo-chip" onclick="switchScenario('analytics', this)">
-                <i class="fa-solid fa-chart-line" style="color: #0071e3;"></i> Multi-Platform Telemetry Inspection
-              </button>
-              <button class="demo-chip" onclick="switchScenario('json_rpc', this)">
-                <i class="fa-solid fa-code" style="color: #34c759;"></i> Raw JSON-RPC 2.0 Payload
-              </button>
+          <!-- Twitter / X Card -->
+          <div class="hub-card">
+            <div class="hub-icon" style="background: rgba(0, 0, 0, 0.08); color: #000;">
+              <i class="fa-brands fa-x-twitter"></i>
+            </div>
+            <h3 class="hub-title">Twitter / X</h3>
+            <p class="hub-desc">Compose multi-tweet threads, upload images/GIFs, and query impression analytics.</p>
+            <a href="https://social-mcp.duckdns.org/auth/twitter/connect?user_id=kuldeep" target="_blank" class="btn-connect-hub x">
+              <i class="fa-brands fa-x-twitter"></i> Connect Twitter / X
+            </a>
+          </div>
+
+          <!-- YouTube Card -->
+          <div class="hub-card">
+            <div class="hub-icon" style="background: rgba(255, 0, 0, 0.1); color: #ff0000;">
+              <i class="fa-brands fa-youtube"></i>
+            </div>
+            <h3 class="hub-title">YouTube</h3>
+            <p class="hub-desc">Upload long-form videos and YouTube Shorts with 8MB resumable chunk streaming.</p>
+            <a href="https://social-mcp.duckdns.org/auth/youtube/connect?user_id=kuldeep" target="_blank" class="btn-connect-hub yt">
+              <i class="fa-brands fa-youtube"></i> Connect YouTube Channel
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Web Studio Direct Publisher (Test in Browser) -->
+    <section class="studio-section" id="web-studio">
+      <div class="container">
+        <div class="studio-box">
+          <div class="studio-header">
+            <h3><i class="fa-solid fa-paper-plane" style="color: #0071e3;"></i> Live Web Publisher Studio</h3>
+            <p>Publish a live post directly from your browser to test your connected accounts without opening any terminal or code!</p>
+          </div>
+
+          <form class="studio-form" onsubmit="handleLiveWebPublish(event)">
+            <div class="form-group">
+              <label class="form-label">Select Social Platform</label>
+              <select id="pub-platform" class="form-select">
+                <option value="instagram">Instagram (Business / Creator Feed & Reels)</option>
+                <option value="twitter">Twitter / X (Tweet & Thread)</option>
+                <option value="youtube">YouTube (Video Upload / Shorts)</option>
+              </select>
             </div>
 
-            <!-- Dynamic Chat Thread -->
-            <div class="chat-layout" id="demo-chat-thread">
-              <!-- User Prompt -->
-              <div class="chat-bubble user">
-                <strong style="color: #86868b; font-size: 0.75rem; text-transform: uppercase;">User Prompt (Claude Desktop)</strong>
-                <p id="demo-user-prompt" style="margin-top: 4px; font-weight: 500;">
-                  "Publish our product launch video 'AI Gateway v1.0' to YouTube with tags #AI #MCP, and tweet the announcement link on Twitter/X."
-                </p>
-              </div>
+            <div class="form-group">
+              <label class="form-label">Post Caption / Description</label>
+              <textarea id="pub-content" class="form-textarea" rows="3" placeholder="Enter caption, description, and hashtags...">Hello World! Testing my AI Social Publishing Gateway 🚀 #AI #MCP #SocialPublishing</textarea>
+            </div>
 
-              <!-- AI MCP Execution Stream -->
-              <div class="chat-bubble ai">
-                <strong style="color: #0071e3; font-size: 0.75rem; text-transform: uppercase;">Social MCP Gateway • Executed Actions</strong>
-                
-                <div id="demo-dynamic-content">
-                  <!-- YouTube Step -->
-                  <div class="execution-card">
-                    <div class="exec-header">
-                      <span class="platform-pill yt"><i class="fa-brands fa-youtube"></i> YouTube Data API v3</span>
-                      <span class="exec-metric">Quota: 1,600 / 10,000 Units • 8MB Chunks</span>
-                    </div>
-                    <div class="progress-bar-track">
-                      <div class="progress-bar-val"></div>
-                    </div>
-                    <div class="exec-output-text">
-                      <i class="fa-solid fa-circle-check"></i> Published Video ID: <code style="font-family: var(--font-mono); font-size: 0.8rem; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e5ea; margin-left: 4px;">dQw4w9WgXcQ</code> (Public, Resumable Upload Succeeded)
-                    </div>
-                  </div>
-
-                  <!-- Twitter Step -->
-                  <div class="execution-card">
-                    <div class="exec-header">
-                      <span class="platform-pill x"><i class="fa-brands fa-x-twitter"></i> Twitter/X API v2</span>
-                      <span class="exec-metric">Latency: 242ms • PKCE S256</span>
-                    </div>
-                    <div class="progress-bar-track">
-                      <div class="progress-bar-val"></div>
-                    </div>
-                    <div class="exec-output-text">
-                      <i class="fa-solid fa-circle-check"></i> Tweet Published: <code style="font-family: var(--font-mono); font-size: 0.8rem; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e5ea; margin-left: 4px;">1892019482710491</code> (Idempotency Key Locked)
-                    </div>
-                  </div>
-                </div>
+            <div class="form-group">
+              <label class="form-label">Media Image / Video URL</label>
+              <input type="text" id="pub-media" class="form-input" value="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&q=80" placeholder="https://example.com/image.jpg">
+              <div class="preset-chips">
+                <span class="preset-chip" onclick="setPresetMedia('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&q=80')">Sample Poster (Unsplash)</span>
+                <span class="preset-chip" onclick="setPresetMedia('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1080&q=80')">Gradient Art (1080x1080)</span>
               </div>
             </div>
+
+            <button type="submit" id="btn-submit-post" class="btn-publish-live">
+              <i class="fa-solid fa-rocket"></i> Publish Post Now
+            </button>
+
+            <!-- Result Box -->
+            <div id="pub-result-box" class="publish-result-box"></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Visual User Guide Section -->
+    <section class="section-block alt-bg" id="user-guide">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-eyebrow">User Guide</span>
+          <h2 class="section-title">How To Use This Server.</h2>
+          <p class="section-desc">Follow these 3 simple visual steps to publish content through AI assistants or directly from the web.</p>
+        </div>
+
+        <div class="guide-steps-grid">
+          <div class="step-card-box">
+            <div class="step-number">1</div>
+            <h4 class="step-card-title">Connect Account (1-Click)</h4>
+            <p class="step-card-desc">Click the <strong>Connect Account</strong> button above for Instagram, Twitter, or YouTube. Authorize the official popup window once.</p>
+          </div>
+
+          <div class="step-card-box">
+            <div class="step-number">2</div>
+            <h4 class="step-card-title">Give Prompt to AI</h4>
+            <p class="step-card-desc">In Claude Desktop, Cursor, or Web Studio, simply tell your AI: <em>"Post this photo on my Instagram with a catchy caption."</em></p>
+          </div>
+
+          <div class="step-card-box">
+            <div class="step-number">3</div>
+            <h4 class="step-card-title">Live Publishing</h4>
+            <p class="step-card-desc">The AI automatically stages the media, communicates with Meta/Twitter/YouTube, and publishes live in under 5 seconds!</p>
           </div>
         </div>
       </div>
     </section>
 
     <!-- Capabilities Section -->
-    <section class="section-block alt-bg" id="capabilities">
+    <section class="section-block" id="capabilities">
       <div class="container">
         <div class="section-header">
           <span class="section-eyebrow">Enterprise Adapters</span>
           <h2 class="section-title">Built for Modern Social APIs.</h2>
-          <p class="section-desc">Zero wrappers, zero fragile scraping. Direct, hardened OAuth 2.0 implementations engineered for high availability and strict rate compliance.</p>
+          <p class="section-desc">Zero fragile scraping. Direct, hardened OAuth 2.0 implementations engineered for high availability and strict rate compliance.</p>
         </div>
 
         <div class="cards-grid-3">
@@ -1192,194 +1159,8 @@
       </div>
     </section>
 
-    <!-- Architecture & Core Specifications -->
-    <section class="section-block" id="architecture">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-eyebrow">System Architecture</span>
-          <h2 class="section-title">Zero-Trust Hardened Gateway.</h2>
-          <p class="section-desc">Designed in Go 1.26 for microsecond latency, zero heap bloat, and enterprise-grade multi-tenant security.</p>
-        </div>
-
-        <div class="cards-grid-3">
-          <div class="feature-card">
-            <div class="feature-icon-wrapper icon-sec">
-              <i class="fa-solid fa-lock"></i>
-            </div>
-            <h3 class="feature-name">AES-256-GCM Vault</h3>
-            <p class="feature-summary">User credentials and OAuth tokens never touch LLM contexts. Encrypted at rest with distinct 12-byte random nonces and out-of-band master keys.</p>
-            <ul class="feature-list">
-              <li><i class="fa-solid fa-check"></i> Zero plaintext credential persistence</li>
-              <li><i class="fa-solid fa-check"></i> Key derivation domain separation</li>
-              <li><i class="fa-solid fa-check"></i> Instant platform credential revocation</li>
-            </ul>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon-wrapper icon-queue">
-              <i class="fa-solid fa-diagram-project"></i>
-            </div>
-            <h3 class="feature-name">Redis 7 Stream Queue</h3>
-            <p class="feature-summary">Sync-First execution: direct immediate publish with automatic fallback to Redis Stream retry workers during transient 429 / 503 platform outages.</p>
-            <ul class="feature-list">
-              <li><i class="fa-solid fa-check"></i> 5-stage jittered exponential backoff</li>
-              <li><i class="fa-solid fa-check"></i> Dead Letter Queue (DLQ) isolation</li>
-              <li><i class="fa-solid fa-check"></i> Fail-Closed rate limit enforcement</li>
-            </ul>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon-wrapper icon-db">
-              <i class="fa-solid fa-database"></i>
-            </div>
-            <h3 class="feature-name">Postgres 16 Auto-Migrator</h3>
-            <p class="feature-summary">Embedded database migration engine (`//go:embed`) provisions all 7 versioned relational tables on first boot with atomic transactional safety.</p>
-            <ul class="feature-list">
-              <li><i class="fa-solid fa-check"></i> Strict idempotency & rollback drills</li>
-              <li><i class="fa-solid fa-check"></i> Multi-tenant IDOR row-level isolation</li>
-              <li><i class="fa-solid fa-check"></i> SHA-256 state integrity snapshots</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 60-Second Integration Section -->
-    <section class="section-block alt-bg" id="integration">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-eyebrow">Easy Integration</span>
-          <h2 class="section-title">60-Second Claude & Cursor Setup.</h2>
-          <p class="section-desc">Connect your AI assistants to the live gateway in seconds using the standard Model Context Protocol configuration.</p>
-        </div>
-
-        <div class="integration-box">
-          <div class="integration-tabs">
-            <button class="int-tab-btn active" onclick="switchCodeTab('claude', this)">Claude Desktop</button>
-            <button class="int-tab-btn" onclick="switchCodeTab('cursor', this)">Cursor IDE</button>
-            <button class="int-tab-btn" onclick="switchCodeTab('curl', this)">cURL / Direct RPC</button>
-          </div>
-
-          <div class="code-container">
-            <button class="btn-copy-code" onclick="copyConfigCode()">
-              <i class="fa-regular fa-copy"></i> Copy Configuration
-            </button>
-            <pre><code id="config-code-block">{
-  "mcpServers": {
-    "social-publisher": {
-      "url": "https://social-mcp.duckdns.org/mcp/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_JWT_OR_USER_TOKEN"
-      }
-    }
-  }
-}</code></pre>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Security Penetration Testing Audit -->
-    <section class="section-block" id="security">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-eyebrow">Audit & Verification</span>
-          <h2 class="section-title">Hardcore Security Drill Results.</h2>
-          <p class="section-desc">Automated penetration test battery executed prior to commercial release across all API attack vectors.</p>
-        </div>
-
-        <div class="audit-table-wrapper">
-          <table class="audit-table">
-            <thead>
-              <tr>
-                <th>Attack Vector / Security Battery</th>
-                <th>Test Scope & Probes</th>
-                <th>Vulnerabilities Detected</th>
-                <th>Compliance Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Kernel Socket SSRF & DNS-Rebinding</strong></td>
-                <td>49 private IP / metadata probes (`169.254.169.254`, RFC 1918)</td>
-                <td>0 Leaks / 49 Blocked</td>
-                <td><span class="badge-compliant"><i class="fa-solid fa-check"></i> PASSED</span></td>
-              </tr>
-              <tr>
-                <td><strong>Multi-Tenant IDOR Matrix</strong></td>
-                <td>110 cross-tenant tenant isolation probes</td>
-                <td>0 Cross-Access</td>
-                <td><span class="badge-compliant"><i class="fa-solid fa-check"></i> PASSED</span></td>
-              </tr>
-              <tr>
-                <td><strong>SQL Injection Adversarial Fuzzing</strong></td>
-                <td>390 malicious SQLi payloads (Tautologies, UNION, Stored Procedures)</td>
-                <td>0 Bypasses (0.00%)</td>
-                <td><span class="badge-compliant"><i class="fa-solid fa-check"></i> PASSED</span></td>
-              </tr>
-              <tr>
-                <td><strong>Dual-Layer Secret Redaction in Telemetry</strong></td>
-                <td>500 log stream evaluations containing bearer tokens & secrets</td>
-                <td>0 Secret Leaks</td>
-                <td><span class="badge-compliant"><i class="fa-solid fa-check"></i> PASSED</span></td>
-              </tr>
-              <tr>
-                <td><strong>Strict TLS 1.2+ Network Handshake</strong></td>
-                <td>Real TCP socket handshakes (SSLv3, TLS 1.0, 1.1, 1.2, 1.3)</td>
-                <td>Legacy Protocols Blocked</td>
-                <td><span class="badge-compliant"><i class="fa-solid fa-check"></i> PASSED</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- FAQ Section -->
-    <section class="section-block alt-bg" id="faq">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-eyebrow">Developer FAQ</span>
-          <h2 class="section-title">Frequently Asked Questions.</h2>
-          <p class="section-desc">Concrete technical answers regarding credentials, rate quotas, media limits, and commercial terms.</p>
-        </div>
-
-        <div class="faq-grid">
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> Can the LLM view my raw social media passwords or tokens?</h4>
-            <p class="faq-answer"><strong>No.</strong> The AI interacts solely through defined JSON-RPC MCP tool interfaces. All OAuth access tokens and refresh tokens remain locked in the AES-256-GCM database vault and are never reflected back into the LLM context window.</p>
-          </div>
-
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> How does the server handle YouTube daily upload quotas?</h4>
-            <p class="faq-answer">YouTube grants 10,000 quota units/day per project. A standard video upload consumes 1,600 units. The server contains an atomic quota tracker that reserves units before initiating chunked uploads and automatically refunds units if preflight validation fails.</p>
-          </div>
-
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> How are Instagram 60-day tokens refreshed?</h4>
-            <p class="faq-answer">Meta issues Long-Lived User Tokens valid for 60 days. When an action occurs within that window, the adapter silently refreshes the token with Meta Graph API. If the window elapses without activity, re-authentication is prompted via `/auth/instagram/connect`.</p>
-          </div>
-
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> What happens if Twitter or Instagram is down (HTTP 503 / 429)?</h4>
-            <p class="faq-answer">The server operates on a Sync-First architecture: it attempts immediate execution, and if the platform returns a transient error, the payload is AES-encrypted into a Redis 7 Stream for 5-stage jittered exponential backoff retry.</p>
-          </div>
-
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> Can I deploy this on Render, Kubernetes, or Docker?</h4>
-            <p class="faq-answer">Yes. The repository includes fully automated Docker multi-stage builds, Docker Compose stacks with Prometheus & Grafana telemetry, and production-ready Kubernetes manifests in `deploy/k8s/`.</p>
-          </div>
-
-          <div class="faq-item">
-            <h4 class="faq-question"><i class="fa-regular fa-circle-question"></i> What is the commercial licensing model?</h4>
-            <p class="faq-answer">Social Publishing MCP Server is proprietary commercial software. Production deployments and team usage require a valid commercial license key or enterprise agreement. Contact <code>kuldeep.poonia.dev@gmail.com</code> for license inquiries.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Pricing & Commercial Licensing -->
-    <section class="section-block" id="pricing">
+    <section class="section-block alt-bg" id="pricing">
       <div class="container">
         <div class="section-header">
           <span class="section-eyebrow">Commercial Licensing</span>
@@ -1455,11 +1236,11 @@
       <div class="footer-col">
         <h5>Product</h5>
         <ul class="footer-links">
-          <li><a href="#capabilities">Platform Capabilities</a></li>
-          <li><a href="#demo">Live Studio Demo</a></li>
-          <li><a href="#integration">Claude Integration</a></li>
-          <li><a href="#architecture">Architecture Specs</a></li>
-          <li><a href="#pricing">Commercial Pricing</a></li>
+          <li><a href="#connect-hub">Connect Accounts</a></li>
+          <li><a href="#web-studio">Live Web Studio</a></li>
+          <li><a href="#user-guide">User Guide</a></li>
+          <li><a href="#capabilities">Capabilities</a></li>
+          <li><a href="#pricing">Licensing</a></li>
         </ul>
       </div>
 
@@ -1467,8 +1248,7 @@
         <h5>Security & Docs</h5>
         <ul class="footer-links">
           <li><a href="https://social-mcp.duckdns.org/health" target="_blank">Health Endpoint</a></li>
-          <li><a href="#security">Penetration Test Report</a></li>
-          <li><a href="#faq">Developer FAQ</a></li>
+          <li><a href="#capabilities">API Capabilities</a></li>
           <li><a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank">GitHub Repository</a></li>
         </ul>
       </div>
@@ -1493,172 +1273,66 @@
     </div>
   </footer>
 
-  <!-- Script for Interactive Demo, Tab Switchers and Toast -->
   <script>
-    const scenarios = {
-      yt_x: {
-        prompt: `"Publish our product launch video 'AI Gateway v1.0' to YouTube with tags #AI #MCP, and tweet the announcement link on Twitter/X."`,
-        content: `
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill yt"><i class="fa-brands fa-youtube"></i> YouTube Data API v3</span>
-              <span class="exec-metric">Quota: 1,600 / 10,000 Units • 8MB Chunks</span>
-            </div>
-            <div class="progress-bar-track">
-              <div class="progress-bar-val" style="width: 100%;"></div>
-            </div>
-            <div class="exec-output-text">
-              <i class="fa-solid fa-circle-check"></i> Published Video ID: <code style="font-family: var(--font-mono); font-size: 0.8rem; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e5ea; margin-left: 4px;">dQw4w9WgXcQ</code> (Public, Resumable Upload Succeeded)
-            </div>
-          </div>
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill x"><i class="fa-brands fa-x-twitter"></i> Twitter/X API v2</span>
-              <span class="exec-metric">Latency: 242ms • PKCE S256</span>
-            </div>
-            <div class="progress-bar-track">
-              <div class="progress-bar-val" style="width: 100%;"></div>
-            </div>
-            <div class="exec-output-text">
-              <i class="fa-solid fa-circle-check"></i> Tweet Published: <code style="font-family: var(--font-mono); font-size: 0.8rem; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e5ea; margin-left: 4px;">1892019482710491</code> (Idempotency Key Locked)
-            </div>
-          </div>
-        `
-      },
-      ig_reel: {
-        prompt: `"Publish our vertical highlight reel 'quick_demo.mp4' to Instagram Reels with cover thumbnail and automated caption."`,
-        content: `
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill ig"><i class="fa-brands fa-instagram"></i> Meta Graph API v21.0</span>
-              <span class="exec-metric">Format: 1080x1920 (9:16) • Transcode: Auto-PNG $\rightarrow$ JPEG</span>
-            </div>
-            <div class="progress-bar-track">
-              <div class="progress-bar-val" style="width: 100%;"></div>
-            </div>
-            <div class="exec-output-text">
-              <i class="fa-solid fa-circle-check"></i> Container Status: <strong>FINISHED</strong> • Media ID: <code style="font-family: var(--font-mono); font-size: 0.8rem; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #e5e5ea; margin-left: 4px;">1802938472910482</code> (Published to Instagram Reels)
-            </div>
-          </div>
-        `
-      },
-      analytics: {
-        prompt: `"Fetch the last 7 days engagement metrics across all connected accounts for cross-platform ROI analysis."`,
-        content: `
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill x"><i class="fa-brands fa-x-twitter"></i> Twitter/X Telemetry</span>
-              <span class="exec-metric">Period: 7 Days</span>
-            </div>
-            <div style="font-size: 0.82rem; color: #1d1d1f; margin-top: 4px; font-family: var(--font-mono);">
-              Impressions: <strong>142,890</strong> • Likes: <strong>3,420</strong> • Retweets: <strong>812</strong> • Profile Clicks: <strong>1,240</strong>
-            </div>
-          </div>
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill yt"><i class="fa-brands fa-youtube"></i> YouTube Telemetry</span>
-              <span class="exec-metric">Period: 7 Days</span>
-            </div>
-            <div style="font-size: 0.82rem; color: #1d1d1f; margin-top: 4px; font-family: var(--font-mono);">
-              Views: <strong>48,200</strong> • Watch Time: <strong>1,920 hrs</strong> • Likes: <strong>2,840</strong> • Shares: <strong>690</strong>
-            </div>
-          </div>
-          <div class="execution-card">
-            <div class="exec-header">
-              <span class="platform-pill ig"><i class="fa-brands fa-instagram"></i> Instagram Insights</span>
-              <span class="exec-metric">Period: 7 Days</span>
-            </div>
-            <div style="font-size: 0.82rem; color: #1d1d1f; margin-top: 4px; font-family: var(--font-mono);">
-              Reach: <strong>94,100</strong> • Reel Plays: <strong>72,400</strong> • Saves: <strong>1,490</strong> • Shares: <strong>1,120</strong>
-            </div>
-          </div>
-        `
-      },
-      json_rpc: {
-        prompt: `"Show the exact JSON-RPC 2.0 payload sent to /mcp/rpc tool invocation."`,
-        content: `
-          <div class="execution-card" style="background: #1e1e24; color: #a9b7c6; padding: 16px; border-radius: 8px;">
-            <pre style="font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; overflow-x: auto; color: #f8f8f2;">{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "publish_post",
-    "arguments": {
-      "platform": "twitter",
-      "content": "Excited to launch our Model Context Protocol server for social publishing! #AI #MCP",
-      "idempotency_key": "9d8e7f6a5b4c3d2e1f0a"
+    function setPresetMedia(url) {
+      document.getElementById('pub-media').value = url;
     }
-  }
-}</pre>
-          </div>
-        `
+
+    async function handleLiveWebPublish(e) {
+      e.preventDefault();
+      const platform = document.getElementById('pub-platform').value;
+      const content = document.getElementById('pub-content').value;
+      const media = document.getElementById('pub-media').value;
+      const btn = document.getElementById('btn-submit-post');
+      const resBox = document.getElementById('pub-result-box');
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Publishing to ' + platform + '...';
+      resBox.className = 'publish-result-box';
+      resBox.style.display = 'none';
+
+      try {
+        const payload = {
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "tools/call",
+          params: {
+            name: "publish_post",
+            arguments: {
+              platform: platform,
+              content: content,
+              media_urls: media ? [media] : [],
+              media_type: "IMAGE"
+            }
+          }
+        };
+
+        const res = await fetch("https://social-mcp.duckdns.org/mcp/rpc", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrdWxkZWVwIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3ODc4MDkxMzEsImV4cCI6MTc4NzgxMDAzMX0.g1rahYJumfmFhrwbGGYn9iEqwwF8UFqIc1Ro4mal3VQ"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.result && !data.result.isError) {
+          resBox.className = 'publish-result-box success';
+          resBox.innerHTML = `<strong>🎉 Success! Post Published to ${platform.toUpperCase()}!</strong><br><pre style="margin-top:8px; font-family: monospace; font-size:0.8rem;">${JSON.stringify(data.result, null, 2)}</pre>`;
+        } else {
+          resBox.className = 'publish-result-box error';
+          const errMsg = data.error ? data.error.message : (data.result ? JSON.stringify(data.result) : "Unknown Error");
+          resBox.innerHTML = `<strong>⚠️ Publishing Error:</strong> ${errMsg}`;
+        }
+      } catch (err) {
+        resBox.className = 'publish-result-box error';
+        resBox.innerHTML = `<strong>⚠️ Network / Server Error:</strong> ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-rocket"></i> Publish Post Now';
       }
-    };
-
-    function switchScenario(key, btn) {
-      document.querySelectorAll('.demo-chip').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-
-      const data = scenarios[key];
-      if (!data) return;
-
-      document.getElementById('demo-user-prompt').innerText = data.prompt;
-      document.getElementById('demo-dynamic-content').innerHTML = data.content;
-    }
-
-    const codeSnippets = {
-      claude: `{
-  "mcpServers": {
-    "social-publisher": {
-      "url": "https://social-mcp.duckdns.org/mcp/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_JWT_OR_USER_TOKEN"
-      }
-    }
-  }
-}`,
-      cursor: `{
-  "mcpServers": {
-    "social-publisher": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sse", "https://social-mcp.duckdns.org/mcp/sse"]
-    }
-  }
-}`,
-      curl: `curl -X POST https://social-mcp.duckdns.org/mcp/rpc \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer YOUR_JWT_OR_USER_TOKEN" \\
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/list"
-  }'`
-    };
-
-    let currentCodeKey = 'claude';
-
-    function switchCodeTab(key, btn) {
-      document.querySelectorAll('.int-tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentCodeKey = key;
-      document.getElementById('config-code-block').innerText = codeSnippets[key];
-    }
-
-    function copyConfigCode() {
-      const code = codeSnippets[currentCodeKey];
-      navigator.clipboard.writeText(code).then(() => {
-        showToast('Configuration snippet copied to clipboard!');
-      });
-    }
-
-    function showToast(text) {
-      const toast = document.getElementById('toast');
-      document.getElementById('toast-text').innerText = text;
-      toast.classList.add('show');
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 3000);
     }
   </script>
 </body>
