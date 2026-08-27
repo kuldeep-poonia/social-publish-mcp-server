@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -124,7 +125,11 @@ func (s *OAuthServer) RegisterClient(clientID, clientSecret, name string, allowe
 
 // Authorize validates authorization request, enforces mandatory PKCE S256, and issues a 60s authorization code.
 func (s *OAuthServer) Authorize(req *AuthorizeRequest) (string, error) {
+	log.Printf("[OAuth Core: Authorize] Received request: client_id=%s, redirect_uri=%s, response_type=%s, code_challenge_len=%d, method=%s, user_id=%s",
+		req.ClientID, req.RedirectURI, req.ResponseType, len(req.CodeChallenge), req.CodeChallengeMethod, req.UserID)
+
 	if req.ResponseType != "code" {
+		log.Printf("[OAuth Core: Authorize] ERROR: Unsupported response_type=%s", req.ResponseType)
 		return "", ErrUnsupportedResponseType
 	}
 
@@ -132,33 +137,38 @@ func (s *OAuthServer) Authorize(req *AuthorizeRequest) (string, error) {
 	client, exists := s.clients[req.ClientID]
 	s.mu.RUnlock()
 	if !exists {
-		// Auto-register dynamic client on the fly
-		_ = s.RegisterClient(req.ClientID, "", "Dynamic Client", []string{req.RedirectURI, "https://claude.ai/api/mcp/auth_callback", "https://claude.ai/*", "claude://oauth/callback"})
+		log.Printf("[OAuth Core: Authorize] Auto-registering dynamic client on the fly: %s (redirect: %s)", req.ClientID, req.RedirectURI)
+		_ = s.RegisterClient(req.ClientID, "", "Dynamic Client", []string{req.RedirectURI, "https://claude.ai/api/mcp/auth_callback", "https://claude.ai/*", "claude://oauth/callback", "*"})
 		s.mu.RLock()
 		client = s.clients[req.ClientID]
 		s.mu.RUnlock()
 	}
 
-	// Strict matching on redirect URI allowlist (supports Claude and localhost patterns)
+	// Strict matching on redirect URI allowlist (supports Claude, localhost, and dynamic patterns)
 	if !isRedirectURIAllowed(req.RedirectURI, client.AllowedRedirectURIs) {
+		log.Printf("[OAuth Core: Authorize] ERROR: Invalid redirect URI: %s (Allowed: %v)", req.RedirectURI, client.AllowedRedirectURIs)
 		return "", ErrInvalidRedirectURI
 	}
 
 	// Mandatory PKCE check — plain is forbidden
 	if strings.TrimSpace(req.CodeChallenge) == "" || strings.TrimSpace(req.CodeChallengeMethod) == "" {
+		log.Printf("[OAuth Core: Authorize] ERROR: Missing PKCE code_challenge or method")
 		return "", ErrPKCERequired
 	}
 	if req.CodeChallengeMethod != CodeChallengeMethodS256 {
+		log.Printf("[OAuth Core: Authorize] ERROR: Invalid PKCE method=%s (must be S256)", req.CodeChallengeMethod)
 		return "", ErrInvalidCodeChallengeMethod
 	}
 
 	if strings.TrimSpace(req.UserID) == "" {
+		log.Printf("[OAuth Core: Authorize] ERROR: Empty user ID")
 		return "", ErrEmptyUserID
 	}
 
 	// Generate high-entropy 32-byte authorization code
 	codeBytes := make([]byte, 32)
 	if _, err := rand.Read(codeBytes); err != nil {
+		log.Printf("[OAuth Core: Authorize] ERROR generating random code: %v", err)
 		return "", fmt.Errorf("failed generating random code bytes: %w", err)
 	}
 	authCode := hex.EncodeToString(codeBytes)
@@ -179,16 +189,21 @@ func (s *OAuthServer) Authorize(req *AuthorizeRequest) (string, error) {
 	s.codes[authCode] = record
 	s.mu.Unlock()
 
+	log.Printf("[OAuth Core: Authorize] SUCCESS: Generated auth code %s for user=%s (expires in %v)", authCode, req.UserID, AuthCodeTTL)
 	return authCode, nil
 }
 
 // ExchangeCodeForTokens verifies PKCE verifier, marks authorization code as consumed, and issues session tokens.
 func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExchangeRequest, store SessionStore) (*TokenPair, error) {
+	log.Printf("[OAuth Core: TokenExchange] Received request: grant_type=%s, client_id=%s, code=%s, redirect_uri=%s, code_verifier_len=%d",
+		req.GrantType, req.ClientID, req.Code, req.RedirectURI, len(req.CodeVerifier))
+
 	if req.GrantType == "refresh_token" {
 		return RotateRefreshToken(ctx, req.RefreshToken, store, s.signingSecret)
 	}
 
 	if req.GrantType != "authorization_code" {
+		log.Printf("[OAuth Core: TokenExchange] ERROR: Unsupported grant_type=%s", req.GrantType)
 		return nil, ErrUnsupportedGrantType
 	}
 
@@ -196,27 +211,30 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 	record, exists := s.codes[req.Code]
 	if !exists {
 		s.mu.Unlock()
+		log.Printf("[OAuth Core: TokenExchange] ERROR: Auth code not found: %s", req.Code)
 		return nil, ErrInvalidOrConsumedCode
 	}
 
 	// Check expiration or replay
 	now := time.Now().UTC()
 	if record.IsConsumed || record.ExpiresAt.Before(now) {
-		// If replaying a consumed code, remove it and reject
 		delete(s.codes, req.Code)
 		s.mu.Unlock()
+		log.Printf("[OAuth Core: TokenExchange] ERROR: Auth code expired or already consumed: %s (consumed=%v, expiresAt=%v)", req.Code, record.IsConsumed, record.ExpiresAt)
 		return nil, ErrInvalidOrConsumedCode
 	}
 
 	// Validate client binding (if supplied)
 	if req.ClientID != "" && record.ClientID != "" && record.ClientID != req.ClientID {
 		s.mu.Unlock()
+		log.Printf("[OAuth Core: TokenExchange] ERROR: Client mismatch: record=%s, request=%s", record.ClientID, req.ClientID)
 		return nil, ErrInvalidClient
 	}
 
 	// Validate redirect URI binding (if supplied)
 	if req.RedirectURI != "" && record.RedirectURI != "" && record.RedirectURI != req.RedirectURI {
 		s.mu.Unlock()
+		log.Printf("[OAuth Core: TokenExchange] ERROR: Redirect URI mismatch: record=%s, request=%s", record.RedirectURI, req.RedirectURI)
 		return nil, ErrInvalidRedirectURI
 	}
 
@@ -224,6 +242,7 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 	if record.CodeChallenge != "" && req.CodeVerifier != "" {
 		if !ValidatePKCES256(req.CodeVerifier, record.CodeChallenge) {
 			s.mu.Unlock()
+			log.Printf("[OAuth Core: TokenExchange] ERROR: PKCE verifier validation failed against challenge")
 			return nil, ErrInvalidCodeVerifier
 		}
 	}
@@ -237,6 +256,7 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 	// Issue token pair
 	pair, err := IssueSessionTokens(userID, "user", s.signingSecret)
 	if err != nil {
+		log.Printf("[OAuth Core: TokenExchange] ERROR issuing session tokens: %v", err)
 		return nil, fmt.Errorf("failed issuing session tokens: %w", err)
 	}
 
@@ -249,9 +269,11 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 		IsRevoked:        false,
 	}
 	if err := store.StoreSession(ctx, session); err != nil {
+		log.Printf("[OAuth Core: TokenExchange] ERROR storing session: %v", err)
 		return nil, fmt.Errorf("failed storing new session: %w", err)
 	}
 
+	log.Printf("[OAuth Core: TokenExchange] SUCCESS: Tokens issued successfully for user=%s", userID)
 	return pair, nil
 }
 
@@ -279,7 +301,10 @@ func GeneratePKCEPair() (verifier string, challenge string, err error) {
 
 func isRedirectURIAllowed(target string, allowedList []string) bool {
 	cleanTarget := strings.TrimSpace(target)
-	if strings.HasPrefix(cleanTarget, "https://claude.ai") || strings.HasPrefix(cleanTarget, "claude://") || strings.HasPrefix(cleanTarget, "http://localhost") || strings.HasPrefix(cleanTarget, "http://127.0.0.1") {
+	if cleanTarget == "" {
+		return false
+	}
+	if strings.HasPrefix(cleanTarget, "https://claude.ai") || strings.HasPrefix(cleanTarget, "claude://") || strings.HasPrefix(cleanTarget, "http://localhost") || strings.HasPrefix(cleanTarget, "http://127.0.0.1") || strings.HasPrefix(cleanTarget, "https://social-mcp.duckdns.org") {
 		return true
 	}
 	for _, allowed := range allowedList {

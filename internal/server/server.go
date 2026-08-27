@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -798,6 +799,7 @@ func (s *HTTPServer) getBaseURL(r *http.Request) string {
 
 func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
 	baseURL := s.getBaseURL(r)
+	log.Printf("[OAuth Discovery] Metadata requested: Host=%s, Path=%s, IP=%s", r.Host, r.URL.Path, extractClientIP(r))
 
 	metadata := map[string]interface{}{
 		"issuer":                                baseURL,
@@ -828,12 +830,14 @@ type dynamicClientRegisterRequest struct {
 
 func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		log.Printf("[OAuth Register] REJECTED: Invalid method=%s", r.Method)
 		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req dynamicClientRegisterRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	log.Printf("[OAuth Register] START: ClientName=%s, RedirectURIs=%v, IP=%s", req.ClientName, req.RedirectURIs, extractClientIP(r))
 
 	if len(req.RedirectURIs) == 0 {
 		req.RedirectURIs = []string{
@@ -855,6 +859,7 @@ func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	_ = s.oauthServer.RegisterClient(clientID, clientSecret, name, req.RedirectURIs)
+	log.Printf("[OAuth Register] SUCCESS: Dynamic client created: client_id=%s, name=%s", clientID, name)
 
 	resp := map[string]interface{}{
 		"client_id":                  clientID,
@@ -875,6 +880,7 @@ func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request)
 
 func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		log.Printf("[OAuth Authorize] REJECTED: Invalid method=%s", r.Method)
 		http.Error(w, "Method Not Allowed, use GET", http.StatusMethodNotAllowed)
 		return
 	}
@@ -905,6 +911,9 @@ func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		redirectURI = "https://claude.ai/api/mcp/auth_callback"
 	}
 
+	log.Printf("[OAuth Authorize] START: client_id=%s, redirect_uri=%s, response_type=%s, state=%s, code_challenge_len=%d, method=%s, user_id=%s, IP=%s",
+		clientID, redirectURI, q.Get("response_type"), q.Get("state"), len(codeChallenge), codeChallengeMethod, userID, extractClientIP(r))
+
 	req := &auth.AuthorizeRequest{
 		ResponseType:        "code",
 		ClientID:            clientID,
@@ -918,6 +927,7 @@ func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	code, err := s.oauthServer.Authorize(req)
 	if err != nil {
+		log.Printf("[OAuth Authorize] FAILED: %v", err)
 		http.Error(w, fmt.Sprintf("Authorization Error: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -927,11 +937,13 @@ func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if req.State != "" {
 		redirectTarget += fmt.Sprintf("&state=%s", req.State)
 	}
+	log.Printf("[OAuth Authorize] SUCCESS: Redirecting user to target: %s", redirectTarget)
 	http.Redirect(w, r, redirectTarget, http.StatusFound)
 }
 
 func (s *HTTPServer) handleToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		log.Printf("[OAuth Token] REJECTED: Invalid method=%s", r.Method)
 		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
 		return
 	}
@@ -954,10 +966,14 @@ func (s *HTTPServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		req.GrantType = "authorization_code"
 	}
 
+	log.Printf("[OAuth Token] START: grant_type=%s, client_id=%s, code=%s, redirect_uri=%s, code_verifier_len=%d, IP=%s",
+		req.GrantType, req.ClientID, req.Code, req.RedirectURI, len(req.CodeVerifier), extractClientIP(r))
+
 	// Use in-memory store for skeleton or repository for DB
 	store := auth.NewInMemorySessionStore()
 	pair, err := s.oauthServer.ExchangeCodeForTokens(r.Context(), &req, store)
 	if err != nil {
+		log.Printf("[OAuth Token] FAILED: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -976,6 +992,7 @@ func (s *HTTPServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		"scope":         "read write publish",
 	}
 
+	log.Printf("[OAuth Token] SUCCESS: Issued Access Token for user")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -1018,6 +1035,9 @@ func (s *HTTPServer) rateLimitMiddleware(next http.Handler) http.Handler {
 // authMiddleware validates Bearer JWT access token on protected MCP endpoints.
 func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[Auth Middleware] Incoming request: Path=%s, Method=%s, HasAuthHeader=%v, HasTokenQuery=%v, IP=%s",
+			r.URL.Path, r.Method, r.Header.Get("Authorization") != "", r.URL.Query().Get("token") != "", extractClientIP(r))
+
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			// Check query param for SSE streaming
@@ -1048,16 +1068,19 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 					ActorID:   devUserID,
 					IPAddress: extractClientIP(r),
 				})
+				log.Printf("[Auth Middleware] DEV BYPASS: user=%s", devUserID)
 				next(w, r.WithContext(ctx))
 				return
 			}
 
+			log.Printf("[Auth Middleware] REJECTED: Missing Bearer token on Path=%s", r.URL.Path)
 			http.Error(w, "Unauthorized: missing Bearer token", http.StatusUnauthorized)
 			return
 		}
 
 		claims, err := auth.ValidateAccessToken(tokenStr, s.cfg.JWTSigningSecret)
 		if err != nil {
+			log.Printf("[Auth Middleware] REJECTED: Invalid token on Path=%s: %v", r.URL.Path, err)
 			http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
 			return
 		}
@@ -1069,6 +1092,8 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				actualUserID = user.ID
 			}
 		}
+
+		log.Printf("[Auth Middleware] SUCCESS: Authenticated user=%s (UUID=%s) on Path=%s", claims.UserID, actualUserID, r.URL.Path)
 
 		// Inject ActorContext for auditing
 		ctx := database.WithActor(r.Context(), database.ActorContext{
