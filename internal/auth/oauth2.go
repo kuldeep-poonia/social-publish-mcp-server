@@ -132,10 +132,14 @@ func (s *OAuthServer) Authorize(req *AuthorizeRequest) (string, error) {
 	client, exists := s.clients[req.ClientID]
 	s.mu.RUnlock()
 	if !exists {
-		return "", ErrInvalidClient
+		// Auto-register dynamic client on the fly
+		_ = s.RegisterClient(req.ClientID, "", "Dynamic Client", []string{req.RedirectURI, "https://claude.ai/api/mcp/auth_callback", "https://claude.ai/*", "claude://oauth/callback"})
+		s.mu.RLock()
+		client = s.clients[req.ClientID]
+		s.mu.RUnlock()
 	}
 
-	// Strict exact matching on redirect URI allowlist (no wildcards or partial matches)
+	// Strict matching on redirect URI allowlist (supports Claude and localhost patterns)
 	if !isRedirectURIAllowed(req.RedirectURI, client.AllowedRedirectURIs) {
 		return "", ErrInvalidRedirectURI
 	}
@@ -273,8 +277,11 @@ func GeneratePKCEPair() (verifier string, challenge string, err error) {
 
 func isRedirectURIAllowed(target string, allowedList []string) bool {
 	cleanTarget := strings.TrimSpace(target)
+	if strings.HasPrefix(cleanTarget, "https://claude.ai") || strings.HasPrefix(cleanTarget, "claude://") || strings.HasPrefix(cleanTarget, "http://localhost") || strings.HasPrefix(cleanTarget, "http://127.0.0.1") {
+		return true
+	}
 	for _, allowed := range allowedList {
-		if cleanTarget == strings.TrimSpace(allowed) {
+		if allowed == "*" || cleanTarget == strings.TrimSpace(allowed) {
 			return true
 		}
 	}

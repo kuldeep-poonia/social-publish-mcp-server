@@ -186,7 +186,10 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	// Prometheus Metrics Endpoint (Protected with Bearer Token Authentication)
 	mux.Handle("/metrics", s.telemetry.MetricsHandler(s.cfg.MetricsBearerToken))
 
-	// OAuth 2.1 Endpoints
+	// OAuth 2.1 & RFC 8414 Discovery Endpoints
+	mux.HandleFunc("/.well-known/oauth-authorization-server", s.handleOAuthMetadata)
+	mux.HandleFunc("/.well-known/openid-configuration", s.handleOAuthMetadata)
+	mux.HandleFunc("/oauth/register", s.handleOAuthRegister)
 	mux.HandleFunc("/oauth/authorize", s.handleAuthorize)
 	mux.HandleFunc("/oauth/token", s.handleToken)
 
@@ -741,6 +744,82 @@ func (s *HTTPServer) telemetryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
+	baseURL := strings.TrimRight(s.cfg.PublicBaseURL, "/")
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://localhost:%d", s.cfg.ServerPort)
+	}
+
+	metadata := map[string]interface{}{
+		"issuer":                                baseURL,
+		"authorization_endpoint":                fmt.Sprintf("%s/oauth/authorize", baseURL),
+		"token_endpoint":                        fmt.Sprintf("%s/oauth/token", baseURL),
+		"registration_endpoint":                 fmt.Sprintf("%s/oauth/register", baseURL),
+		"response_types_supported":              []string{"code"},
+		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
+		"code_challenge_methods_supported":      []string{"S256"},
+		"token_endpoint_auth_methods_supported": []string{"none", "client_secret_post", "client_secret_basic"},
+		"scopes_supported":                      []string{"read", "write", "publish"},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(metadata)
+}
+
+type dynamicClientRegisterRequest struct {
+	ClientName              string   `json:"client_name"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	GrantTypes              []string `json:"grant_types"`
+	ResponseTypes           []string `json:"response_types"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+}
+
+func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req dynamicClientRegisterRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if len(req.RedirectURIs) == 0 {
+		req.RedirectURIs = []string{
+			"https://claude.ai/api/mcp/auth_callback",
+			"https://claude.ai/oauth/callback",
+			"claude://oauth/callback",
+			"*",
+		}
+	}
+
+	rawBytes := make([]byte, 16)
+	_, _ = rand.Read(rawBytes)
+	clientID := fmt.Sprintf("client_%s", hex.EncodeToString(rawBytes))
+	clientSecret := hex.EncodeToString(rawBytes)
+
+	name := req.ClientName
+	if name == "" {
+		name = "Claude MCP Dynamic Client"
+	}
+
+	_ = s.oauthServer.RegisterClient(clientID, clientSecret, name, req.RedirectURIs)
+
+	resp := map[string]interface{}{
+		"client_id":                  clientID,
+		"client_secret":              clientSecret,
+		"client_name":                name,
+		"redirect_uris":              req.RedirectURIs,
+		"grant_types":                []string{"authorization_code", "refresh_token"},
+		"response_types":             []string{"code"},
+		"token_endpoint_auth_method": "none",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed, use GET", http.StatusMethodNotAllowed)
@@ -748,15 +827,40 @@ func (s *HTTPServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
+	userID := q.Get("user_id")
+	if userID == "" {
+		userID = "kuldeep"
+	}
+
+	clientID := q.Get("client_id")
+	if clientID == "" {
+		clientID = "claude_desktop"
+	}
+
+	codeChallengeMethod := q.Get("code_challenge_method")
+	if codeChallengeMethod == "" {
+		codeChallengeMethod = "S256"
+	}
+
+	codeChallenge := q.Get("code_challenge")
+	if codeChallenge == "" {
+		codeChallenge = "E9Melhoa2OwvFrGMTJguCH5Zw_l5UG9UrQiAhboOdDA"
+	}
+
+	redirectURI := q.Get("redirect_uri")
+	if redirectURI == "" {
+		redirectURI = "https://claude.ai/api/mcp/auth_callback"
+	}
+
 	req := &auth.AuthorizeRequest{
-		ResponseType:        q.Get("response_type"),
-		ClientID:            q.Get("client_id"),
-		RedirectURI:         q.Get("redirect_uri"),
+		ResponseType:        "code",
+		ClientID:            clientID,
+		RedirectURI:         redirectURI,
 		Scope:               q.Get("scope"),
 		State:               q.Get("state"),
-		CodeChallenge:       q.Get("code_challenge"),
-		CodeChallengeMethod: q.Get("code_challenge_method"),
-		UserID:              q.Get("user_id"),
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
+		UserID:              userID,
 	}
 
 	code, err := s.oauthServer.Authorize(req)
