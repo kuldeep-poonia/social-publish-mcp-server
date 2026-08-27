@@ -1098,7 +1098,7 @@ func (s *HTTPServer) handleTwitterConnect(w http.ResponseWriter, r *http.Request
 	state := hex.EncodeToString(stateBytes)
 
 	callbackURL := strings.TrimSpace(s.cfg.TwitterRedirectURI)
-	if callbackURL == "" {
+	if callbackURL == "" || (strings.Contains(callbackURL, "localhost") && strings.Contains(r.Host, "duckdns.org")) {
 		callbackURL = fmt.Sprintf("%s/auth/twitter/callback", s.getBaseURL(r))
 	}
 
@@ -1247,7 +1247,7 @@ func (s *HTTPServer) handleYouTubeConnect(w http.ResponseWriter, r *http.Request
 	state := hex.EncodeToString(stateBytes)
 
 	callbackURL := strings.TrimSpace(s.cfg.YouTubeRedirectURI)
-	if callbackURL == "" {
+	if callbackURL == "" || (strings.Contains(callbackURL, "localhost") && strings.Contains(r.Host, "duckdns.org")) {
 		callbackURL = fmt.Sprintf("%s/auth/youtube/callback", s.getBaseURL(r))
 	}
 
@@ -1365,7 +1365,7 @@ func (s *HTTPServer) handleInstagramConnect(w http.ResponseWriter, r *http.Reque
 	state := hex.EncodeToString(stateBytes)
 
 	callbackURL := strings.TrimSpace(s.cfg.InstagramRedirectURI)
-	if callbackURL == "" {
+	if callbackURL == "" || (strings.Contains(callbackURL, "localhost") && strings.Contains(r.Host, "duckdns.org")) {
 		callbackURL = fmt.Sprintf("%s/auth/instagram/callback", s.getBaseURL(r))
 	}
 

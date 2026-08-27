@@ -86,15 +86,15 @@ func LoadConfig() (*Config, error) {
 		RateLimitFailClosed:      getEnvAsBool("RATELIMIT_FAIL_CLOSED", true),
 		TwitterClientID:          getEnv("TWITTER_CLIENT_ID", ""),
 		TwitterClientSecret:      getEnv("TWITTER_CLIENT_SECRET", ""),
-		TwitterRedirectURI:       getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/auth/twitter/callback"),
+		TwitterRedirectURI:       getEnv("TWITTER_REDIRECT_URI", ""),
 		YouTubeClientID:          getEnv("YOUTUBE_CLIENT_ID", ""),
 		YouTubeClientSecret:      getEnv("YOUTUBE_CLIENT_SECRET", ""),
-		YouTubeRedirectURI:       getEnv("YOUTUBE_REDIRECT_URI", "http://localhost:8080/auth/youtube/callback"),
+		YouTubeRedirectURI:       getEnv("YOUTUBE_REDIRECT_URI", ""),
 		InstagramClientID:        getEnv("INSTAGRAM_CLIENT_ID", ""),
 		InstagramClientSecret:    getEnv("INSTAGRAM_CLIENT_SECRET", ""),
-		InstagramRedirectURI:     getEnv("INSTAGRAM_REDIRECT_URI", "http://localhost:8080/auth/instagram/callback"),
+		InstagramRedirectURI:     getEnv("INSTAGRAM_REDIRECT_URI", ""),
 		InstagramWebhookSecret:   getEnv("INSTAGRAM_WEBHOOK_SECRET", ""),
-		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", "https://social-mcp.duckdns.org"),
 	}
 
 	// Validate and decode Token Encryption Key
