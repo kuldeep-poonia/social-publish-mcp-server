@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -247,6 +248,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	// REST API v1 Endpoints (Direct integration for ChatGPT Actions, Postman, Webhooks)
 	mux.HandleFunc("/api/v1/publish", s.authMiddleware(s.handleRESTPublish))
+	mux.HandleFunc("/api/v1/upload", s.authMiddleware(s.handleRESTUpload))
 	mux.HandleFunc("/api/v1/analytics", s.authMiddleware(s.handleRESTAnalytics))
 	mux.HandleFunc("/api/v1/insights", s.authMiddleware(s.handleRESTInsights))
 	mux.HandleFunc("/api/v1/optimize", s.authMiddleware(s.handleRESTOptimize))
@@ -920,7 +922,43 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
-	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler)
+	uploadHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		rawBase64, _ := args["media_data"].(string)
+		if rawBase64 == "" {
+			return nil, errors.New("media_data (base64 string) is required")
+		}
+		fileName, _ := args["file_name"].(string)
+		ext := filepath.Ext(fileName)
+		if ext == "" {
+			ext = "jpg"
+		}
+		decoded, err := base64.StdEncoding.DecodeString(rawBase64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid base64 encoding: %w", err)
+		}
+		if s.mediaStager == nil {
+			return nil, errors.New("media stager is not initialized")
+		}
+		publicURL, token, _, stageErr := s.mediaStager.StageMedia(decoded, ext, "image/jpeg")
+		if stageErr != nil {
+			return nil, fmt.Errorf("failed staging media: %w", stageErr)
+		}
+		resp := map[string]interface{}{
+			"status":      "staged",
+			"public_url":  publicURL,
+			"token":       token,
+			"instruction": "Pass this public_url into publish_post media_urls to publish directly to Instagram/Twitter/YouTube",
+		}
+		b, _ := json.Marshal(resp)
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(b)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler)
 	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
 }
 
@@ -1923,7 +1961,11 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 											"items": map[string]string{
 												"type": "string",
 											},
-											"description": "Optional media image or video URLs",
+											"description": "Optional public media image or video URLs",
+										},
+										"media_data": map[string]interface{}{
+											"type":        "string",
+											"description": "Optional Base64-encoded binary string of any AI-generated or local image/video to auto-stage and publish",
 										},
 										"idempotency_key": map[string]interface{}{
 											"type":        "string",
@@ -1942,6 +1984,37 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 						"401": map[string]interface{}{
 							"description": "Unauthorized - valid Bearer token or OAuth session required",
 						},
+					},
+				},
+			},
+			"/api/v1/upload": map[string]interface{}{
+				"post": map[string]interface{}{
+					"operationId": "uploadMedia",
+					"summary":     "Stage AI-generated media to public URL",
+					"description": "Uploads Base64 binary image/video data and returns a public HTTPS URL accessible by Instagram, YouTube, and Twitter crawlers.",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"file_name": map[string]interface{}{
+											"type":        "string",
+											"description": "Optional filename with extension (e.g. image.jpg, video.mp4)",
+										},
+										"media_data": map[string]interface{}{
+											"type":        "string",
+											"description": "Base64-encoded binary string of the image or video",
+										},
+									},
+									"required": []string{"media_data"},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Media staged successfully"},
 					},
 				},
 			},
@@ -2276,4 +2349,40 @@ func (s *HTTPServer) handleRESTConnect(w http.ResponseWriter, r *http.Request) {
 		"status":      "action_required",
 		"instruction": "Open connect_url in your web browser to authenticate and link account",
 	})
+}
+
+func (s *HTTPServer) handleRESTUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqBody map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	callReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+	}
+	paramsJSON, _ := json.Marshal(map[string]interface{}{
+		"name":      "upload_media",
+		"arguments": reqBody,
+	})
+	callReq.Params = paramsJSON
+
+	reqBytes, _ := json.Marshal(callReq)
+	resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+	w.Header().Set("Content-Type", "application/json")
+	if resp != nil && resp.Error != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(resp.Error)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp.Result)
 }

@@ -61,8 +61,8 @@ func (s *Server) registerPingTool() {
 	})
 }
 
-// RegisterSocialTools registers standard schemas for publish_post, get_analytics, and connect_platform tools.
-func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHandler ToolHandler) {
+// RegisterSocialTools registers standard schemas for publish_post, get_analytics, connect_platform, and upload_media tools.
+func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler ToolHandler) {
 	publishSchema := `{
 		"type": "object",
 		"properties": {
@@ -78,7 +78,11 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 			"media_urls": {
 				"type": "array",
 				"items": {"type": "string"},
-				"description": "Optional URLs of media attachments to upload"
+				"description": "Optional URLs of public media attachments"
+			},
+			"media_data": {
+				"type": "string",
+				"description": "Optional Base64-encoded binary string of any AI-generated or local image/video to auto-stage and publish"
 			},
 			"idempotency_key": {
 				"type": "string",
@@ -91,7 +95,7 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 
 	s.RegisterTool(Tool{
 		Name:        "publish_post",
-		Description: "Publish a text, image, or video post to a connected social platform with idempotency protection",
+		Description: "Publish a text, image, or video post (via public URL or Base64 media_data) to a connected social platform with idempotency protection",
 		InputSchema: json.RawMessage(publishSchema),
 	}, publishHandler)
 
@@ -140,6 +144,28 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 		Description: "Generate an OAuth 2.0 PKCE authorization URL to connect a user's social media account",
 		InputSchema: json.RawMessage(connectSchema),
 	}, connectHandler)
+
+	uploadSchema := `{
+		"type": "object",
+		"properties": {
+			"file_name": {
+				"type": "string",
+				"description": "Optional filename with extension (e.g. image.jpg, reel.mp4)"
+			},
+			"media_data": {
+				"type": "string",
+				"description": "Base64-encoded binary string of the AI-generated image or video to stage for public access"
+			}
+		},
+		"required": ["media_data"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "upload_media",
+		Description: "Upload and stage AI-generated images or videos into a public HTTPS URL accessible by Instagram/YouTube/Twitter crawlers",
+		InputSchema: json.RawMessage(uploadSchema),
+	}, uploadHandler)
 }
 
 // RegisterInsightsAndOptimizationTools registers schemas for get_account_insights and optimize_content_seo.
