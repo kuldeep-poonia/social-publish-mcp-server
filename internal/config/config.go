@@ -161,12 +161,20 @@ func LoadConfig() (*Config, error) {
 }
 
 // PostgresDSN returns the standard PostgreSQL connection string for the configured parameters.
-// If DATABASE_URL is provided, it is returned directly for seamless cloud deployments (Render, Supabase, Neon).
+// If DATABASE_URL is provided, it is returned with pooler compatibility settings (disabling statement cache for Supabase/PgBouncer).
 func (c *Config) PostgresDSN() string {
 	if c.DatabaseURL != "" {
-		return c.DatabaseURL
+		dsn := c.DatabaseURL
+		if !strings.Contains(dsn, "default_query_exec_mode=") && !strings.Contains(dsn, "statement_cache_capacity=") {
+			if strings.Contains(dsn, "?") {
+				dsn += "&default_query_exec_mode=simple_protocol&statement_cache_capacity=0"
+			} else {
+				dsn += "?default_query_exec_mode=simple_protocol&statement_cache_capacity=0"
+			}
+		}
+		return dsn
 	}
-	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s default_query_exec_mode=simple_protocol statement_cache_capacity=0",
 		c.PostgresHost, c.PostgresPort, c.PostgresUser, c.PostgresPassword, c.PostgresDB, c.PostgresSSLMode)
 }
 

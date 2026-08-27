@@ -13,7 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/server"
@@ -39,11 +40,15 @@ func main() {
 }
 
 func run(ctx context.Context, cfg *config.Config) error {
-	// Initialize PostgreSQL connection pool
-	db, err := sql.Open("pgx", cfg.PostgresDSN())
+	// Initialize PostgreSQL connection pool with pooler compatibility (disabling statement cache for Supabase/PgBouncer)
+	connConfig, err := pgx.ParseConfig(cfg.PostgresDSN())
 	if err != nil {
-		return fmt.Errorf("failed opening database connection pool: %w", err)
+		return fmt.Errorf("failed parsing database connection string: %w", err)
 	}
+	connConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	connConfig.StatementCacheCapacity = 0
+
+	db := stdlib.OpenDB(*connConfig)
 	defer db.Close()
 
 	db.SetMaxOpenConns(25)
