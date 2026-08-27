@@ -176,12 +176,39 @@ func (s *Server) HandleRequest(ctx context.Context, rawReq []byte) *JSONRPCRespo
 	}
 
 	switch req.Method {
+	case "server/discover":
+		return &JSONRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result: map[string]interface{}{
+				"protocolVersion": ProtocolVersion,
+				"serverInfo": Implementation{
+					Name:    ServerName,
+					Version: ServerVersion,
+				},
+				"capabilities": ServerCapabilities{
+					Tools: map[string]interface{}{"listChanged": false},
+				},
+			},
+		}
+
 	case "initialize":
+		var initParams struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		}
+		if len(req.Params) > 0 {
+			_ = json.Unmarshal(req.Params, &initParams)
+		}
+		protoVer := ProtocolVersion
+		if initParams.ProtocolVersion != "" {
+			protoVer = initParams.ProtocolVersion
+		}
+
 		return &JSONRPCResponse{
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Result: InitializeResult{
-				ProtocolVersion: ProtocolVersion,
+				ProtocolVersion: protoVer,
 				Capabilities: ServerCapabilities{
 					Tools: map[string]interface{}{"listChanged": false},
 				},

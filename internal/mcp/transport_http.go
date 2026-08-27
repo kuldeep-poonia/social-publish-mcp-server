@@ -50,6 +50,14 @@ func (t *HTTPTransport) HandleDirectRPC(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	resp := t.server.HandleRequest(ctx, body)
 
+	// If request was a notification (no response needed per JSON-RPC 2.0), return 202 Accepted
+	if resp == nil {
+		log.Printf("[MCP Direct RPC] NOTIFICATION PROCESSED: 202 Accepted")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
