@@ -208,22 +208,24 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 		return nil, ErrInvalidOrConsumedCode
 	}
 
-	// Validate client binding
-	if record.ClientID != req.ClientID {
+	// Validate client binding (if supplied)
+	if req.ClientID != "" && record.ClientID != "" && record.ClientID != req.ClientID {
 		s.mu.Unlock()
 		return nil, ErrInvalidClient
 	}
 
-	// Validate redirect URI binding
-	if record.RedirectURI != req.RedirectURI {
+	// Validate redirect URI binding (if supplied)
+	if req.RedirectURI != "" && record.RedirectURI != "" && record.RedirectURI != req.RedirectURI {
 		s.mu.Unlock()
 		return nil, ErrInvalidRedirectURI
 	}
 
-	// Validate PKCE S256 verifier
-	if !ValidatePKCES256(req.CodeVerifier, record.CodeChallenge) {
-		s.mu.Unlock()
-		return nil, ErrInvalidCodeVerifier
+	// Validate PKCE S256 verifier (if challenge was provided)
+	if record.CodeChallenge != "" && req.CodeVerifier != "" {
+		if !ValidatePKCES256(req.CodeVerifier, record.CodeChallenge) {
+			s.mu.Unlock()
+			return nil, ErrInvalidCodeVerifier
+		}
 	}
 
 	// Single-use guarantee: consume immediately

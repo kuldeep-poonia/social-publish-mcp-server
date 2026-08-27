@@ -935,31 +935,44 @@ func (s *HTTPServer) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed parsing form", http.StatusBadRequest)
-		return
-	}
-
-	req := &auth.TokenExchangeRequest{
-		GrantType:    r.FormValue("grant_type"),
-		Code:         r.FormValue("code"),
-		ClientID:     r.FormValue("client_id"),
-		CodeVerifier: r.FormValue("code_verifier"),
-		RedirectURI:  r.FormValue("redirect_uri"),
-		RefreshToken: r.FormValue("refresh_token"),
+	var req auth.TokenExchangeRequest
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	} else {
+		_ = r.ParseForm()
+		req.GrantType = r.FormValue("grant_type")
+		req.Code = r.FormValue("code")
+		req.ClientID = r.FormValue("client_id")
+		req.CodeVerifier = r.FormValue("code_verifier")
+		req.RedirectURI = r.FormValue("redirect_uri")
+		req.RefreshToken = r.FormValue("refresh_token")
 	}
 
 	// Use in-memory store for skeleton or repository for DB
 	store := auth.NewInMemorySessionStore()
-	pair, err := s.oauthServer.ExchangeCodeForTokens(r.Context(), req, store)
+	pair, err := s.oauthServer.ExchangeCodeForTokens(r.Context(), &req, store)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"invalid_grant","error_description":"%v"}`, err), http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":             "invalid_grant",
+			"error_description": fmt.Sprintf("%v", err),
+		})
 		return
+	}
+
+	// RFC 6749 Compliant Token Response
+	resp := map[string]interface{}{
+		"access_token":  pair.AccessToken,
+		"token_type":    "Bearer",
+		"expires_in":    900,
+		"refresh_token": pair.RefreshToken,
+		"scope":         "read write publish",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(pair)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // corsMiddleware enforces strict origin matching and prevents wildcard '*' with credentials.
