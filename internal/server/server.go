@@ -1887,7 +1887,7 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	openAPISpec := map[string]interface{}{
-		"openapi": "3.0.3",
+		"openapi": "3.1.0",
 		"info": map[string]interface{}{
 			"title":       "Social Publisher & Analytics AI API",
 			"description": "Multi-platform Social Media Publishing, Account Insights, and AI SEO Optimization API for Instagram, YouTube, and Twitter/X.",
@@ -2045,6 +2045,7 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		"components": map[string]interface{}{
+			"schemas": map[string]interface{}{},
 			"securitySchemes": map[string]interface{}{
 				"OAuth2": map[string]interface{}{
 					"type": "oauth2",
@@ -2060,16 +2061,10 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 						},
 					},
 				},
-				"BearerAuth": map[string]interface{}{
-					"type":         "http",
-					"scheme":       "bearer",
-					"bearerFormat": "JWT",
-				},
 			},
 		},
 		"security": []map[string][]string{
 			{"OAuth2": {"read", "write", "publish"}},
-			{"BearerAuth": {}},
 		},
 	}
 

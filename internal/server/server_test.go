@@ -347,8 +347,8 @@ func TestServer_OpenAPIAndChatGPTIntegration(t *testing.T) {
 		t.Fatalf("failed decoding openapi.json: %v", err)
 	}
 
-	if openAPIDoc.OpenAPI != "3.0.3" {
-		t.Errorf("expected OpenAPI version 3.0.3, got %s", openAPIDoc.OpenAPI)
+	if openAPIDoc.OpenAPI != "3.1.0" {
+		t.Errorf("expected OpenAPI version 3.1.0, got %s", openAPIDoc.OpenAPI)
 	}
 
 	if _, exists := openAPIDoc.Paths["/api/v1/publish"]; !exists {
