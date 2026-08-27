@@ -184,9 +184,16 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mux := http.NewServeMux()
 
-	// Public Landing Page & Healthcheck
+	// Public Landing Page, Brand Assets & Healthcheck
 	mux.HandleFunc("/", s.handleRoot)
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/favicon.ico", s.handleFavicon)
+	mux.HandleFunc("/favicon.png", s.handleFavicon)
+	mux.HandleFunc("/favicon.svg", s.handleFavicon)
+	mux.HandleFunc("/logo.png", s.handleLogo)
+	mux.HandleFunc("/logo.jpg", s.handleLogo)
+	mux.HandleFunc("/icon.png", s.handleLogo)
+	mux.HandleFunc("/apple-touch-icon.png", s.handleLogo)
 
 	// Prometheus Metrics Endpoint (Protected with Bearer Token Authentication)
 	mux.Handle("/metrics", s.telemetry.MetricsHandler(s.cfg.MetricsBearerToken))
@@ -723,6 +730,27 @@ func (s *HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+func (s *HTTPServer) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, ".svg") {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(web.FaviconSVG)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(web.LogoPNG)
+}
+
+func (s *HTTPServer) handleLogo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(web.LogoPNG)
+}
+
 type statusRecorder struct {
 	http.ResponseWriter
 	statusCode int
@@ -775,6 +803,8 @@ func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request)
 		"authorization_endpoint":                fmt.Sprintf("%s/oauth/authorize", baseURL),
 		"token_endpoint":                        fmt.Sprintf("%s/oauth/token", baseURL),
 		"registration_endpoint":                 fmt.Sprintf("%s/oauth/register", baseURL),
+		"icon_url":                              fmt.Sprintf("%s/logo.png", baseURL),
+		"logo_uri":                              fmt.Sprintf("%s/logo.png", baseURL),
 		"response_types_supported":              []string{"code"},
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":      []string{"S256"},
