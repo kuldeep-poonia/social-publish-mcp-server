@@ -1842,16 +1842,25 @@ func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Requ
 	_, _ = fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html>
-<head><title>Instagram Connected</title><style>body{font-family:sans-serif;background:#0d0d0d;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;} .card{background:#1a1a1a;padding:40px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-width:480px;border:1px solid #333;} h1{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;} p{color:#aaa;line-height:1.6;} .badge{background:#00ba7c22;color:#00ba7c;padding:6px 16px;border-radius:20px;display:inline-block;font-weight:bold;margin-bottom:16px;} .handle{font-weight:bold;color:#fff;}</style></head>
+<head><title>Instagram Connected</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d0d0d;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px;} .card{background:#1a1a1a;padding:40px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-width:500px;border:1px solid #333;} h1{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;} p{color:#aaa;line-height:1.6;} .badge{background:#00ba7c22;color:#00ba7c;padding:6px 16px;border-radius:20px;display:inline-block;font-weight:bold;margin-bottom:16px;} .handle{font-weight:bold;color:#fff;} .btn-group{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;} .btn{display:inline-block;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;transition:all 0.2s;} .btn-chatgpt{background:#10a37f;color:#fff;} .btn-claude{background:#d97706;color:#fff;}</style></head>
 <body>
 <div class="card">
 <div class="badge">Connected Successfully</div>
 <h1>Instagram Business Authorized</h1>
-<p>Your Instagram Business account <span class="handle">@%s</span> (ID: %s) has been cryptographically linked and stored in the encrypted token vault for user <strong>%s</strong> (UUID: %s).</p>
-<p>You can now use the <code>publish_post</code> (supporting photos and 90s Reels) and <code>get_analytics</code> MCP tools in Claude Desktop or your AI agent!</p>
+<p>Your Instagram Business account <span class="handle">@%s</span> (ID: %s) is now securely linked in the encrypted token vault for user <strong>%s</strong>.</p>
+<p>You can now go back to ChatGPT or Claude and publish your posts instantly!</p>
+<div class="btn-group">
+<a href="https://chatgpt.com" class="btn btn-chatgpt">Back to ChatGPT</a>
+<a href="https://claude.ai" class="btn btn-claude">Back to Claude</a>
 </div>
+</div>
+<script>
+if (window.opener) {
+  setTimeout(function() { window.close(); }, 3000);
+}
+</script>
 </body>
-</html>`, igAccount.Username, igAccount.ID, oauthState.userID, actualUserID)
+</html>`, igAccount.Username, igAccount.ID, oauthState.userID)
 }
 
 // handleInstagramWebhook handles Meta webhook challenge verifications and event delivery.
