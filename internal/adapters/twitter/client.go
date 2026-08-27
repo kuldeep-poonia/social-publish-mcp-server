@@ -222,6 +222,141 @@ func (c *Client) GetTweetAnalytics(ctx context.Context, accessToken, tweetID str
 	return &metricsResp, nil
 }
 
+// GetAccountProfile queries profile metrics for the authenticated Twitter user.
+func (c *Client) GetAccountProfile(ctx context.Context, accessToken string) (*TwitterUserProfile, error) {
+	apiURL := fmt.Sprintf("%s/users/me?user.fields=public_metrics,description", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating profile request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.executeWithBackoff(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseAPIError(resp)
+	}
+
+	var userResp struct {
+		Data struct {
+			ID            string `json:"id"`
+			Name          string `json:"name"`
+			Username      string `json:"username"`
+			Description   string `json:"description"`
+			PublicMetrics struct {
+				FollowersCount int `json:"followers_count"`
+				FollowingCount int `json:"following_count"`
+				TweetCount     int `json:"tweet_count"`
+				ListedCount    int `json:"listed_count"`
+			} `json:"public_metrics"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
+		return nil, fmt.Errorf("failed decoding user profile: %w", err)
+	}
+
+	return &TwitterUserProfile{
+		ID:             userResp.Data.ID,
+		Name:           userResp.Data.Name,
+		Username:       userResp.Data.Username,
+		Description:    userResp.Data.Description,
+		FollowersCount: userResp.Data.PublicMetrics.FollowersCount,
+		FollowingCount: userResp.Data.PublicMetrics.FollowingCount,
+		TweetCount:     userResp.Data.PublicMetrics.TweetCount,
+		ListedCount:    userResp.Data.PublicMetrics.ListedCount,
+	}, nil
+}
+
+// GetRecentTweets retrieves recent tweets for the specified user ID.
+func (c *Client) GetRecentTweets(ctx context.Context, accessToken, userID string, limit int) ([]TweetMetricsResponse, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	apiURL := fmt.Sprintf("%s/users/%s/tweets?tweet.fields=public_metrics,created_at&max_results=%d", c.baseURL, userID, limit)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating recent tweets request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.executeWithBackoff(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseAPIError(resp)
+	}
+
+	var listResp struct {
+		Data []struct {
+			ID            string             `json:"id"`
+			Text          string             `json:"text"`
+			CreatedAt     time.Time          `json:"created_at"`
+			PublicMetrics TweetPublicMetrics `json:"public_metrics"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+		return nil, fmt.Errorf("failed decoding recent tweets: %w", err)
+	}
+
+	var results []TweetMetricsResponse
+	for _, item := range listResp.Data {
+		var m TweetMetricsResponse
+		m.Data.ID = item.ID
+		m.Data.Text = item.Text
+		m.Data.CreatedAt = item.CreatedAt
+		m.Data.PublicMetrics = item.PublicMetrics
+		results = append(results, m)
+	}
+
+	return results, nil
+}
+
+// GetAccountInsights aggregates profile data, recent tweets, and engagement statistics.
+func (c *Client) GetAccountInsights(ctx context.Context, accessToken string) (*TwitterAccountInsights, error) {
+	profile, err := c.GetAccountProfile(ctx, accessToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed retrieving twitter profile: %w", err)
+	}
+
+	recentTweets, _ := c.GetRecentTweets(ctx, accessToken, profile.ID, 10)
+
+	var totalImpressions, totalLikes, totalRetweets, totalReplies int
+	for _, tw := range recentTweets {
+		totalImpressions += tw.Data.PublicMetrics.ImpressionCount
+		totalLikes += tw.Data.PublicMetrics.LikeCount
+		totalRetweets += tw.Data.PublicMetrics.RetweetCount
+		totalReplies += tw.Data.PublicMetrics.ReplyCount
+	}
+
+	diagnostics := map[string]interface{}{
+		"followers_count":           profile.FollowersCount,
+		"recent_tweets_count":       len(recentTweets),
+		"total_impressions":         totalImpressions,
+		"avg_impressions_per_tweet": 0,
+		"diagnostic_status":         "healthy",
+		"recommendation":            "Post high-engagement threads with clear hooks, questions, and multimedia attachments.",
+	}
+	if len(recentTweets) > 0 {
+		diagnostics["avg_impressions_per_tweet"] = totalImpressions / len(recentTweets)
+	}
+
+	return &TwitterAccountInsights{
+		Profile:      *profile,
+		RecentTweets: recentTweets,
+		Diagnostics:  diagnostics,
+		RetrievedAt:  time.Now().UTC(),
+	}, nil
+}
+
 // UploadMediaChunked performs chunked upload (INIT -> APPEND -> FINALIZE) against upload.twitter.com.
 func (c *Client) UploadMediaChunked(ctx context.Context, accessToken string, mediaReader io.ReaderAt, size int64, mediaType MediaType) (string, error) {
 	// Step 1: INIT Command

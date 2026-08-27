@@ -160,6 +160,45 @@ type UnifiedInstagramMetrics struct {
 	RetrievedAt       time.Time `json:"retrieved_at"`
 }
 
+// InstagramUserProfile represents account metadata for an IG Business/Creator account.
+type InstagramUserProfile struct {
+	ID             string `json:"id"`
+	Username       string `json:"username"`
+	Name           string `json:"name"`
+	Biography      string `json:"biography"`
+	FollowersCount int64  `json:"followers_count"`
+	FollowsCount   int64  `json:"follows_count"`
+	MediaCount     int64  `json:"media_count"`
+	Website        string `json:"website,omitempty"`
+}
+
+// InstagramRecentMediaItem represents high-level metrics for recently published media.
+type InstagramRecentMediaItem struct {
+	ID               string    `json:"id"`
+	Caption          string    `json:"caption,omitempty"`
+	MediaType        string    `json:"media_type"`
+	MediaProductType string    `json:"media_product_type,omitempty"`
+	LikeCount        int64     `json:"like_count"`
+	CommentsCount    int64     `json:"comments_count"`
+	Timestamp        time.Time `json:"timestamp"`
+	Permalink        string    `json:"permalink,omitempty"`
+}
+
+// UnifiedInstagramAccountInsights aggregates account-level metrics, growth, and content comparisons.
+type UnifiedInstagramAccountInsights struct {
+	Profile           InstagramUserProfile       `json:"profile"`
+	Period            string                     `json:"period"`
+	TotalReach        int64                      `json:"total_reach"`
+	TotalImpressions  int64                      `json:"total_impressions"`
+	ProfileViews      int64                      `json:"profile_views"`
+	WebsiteClicks     int64                      `json:"website_clicks"`
+	TotalInteractions int64                      `json:"total_interactions"`
+	EngagementRatePct float64                    `json:"engagement_rate_pct"`
+	RecentMedia       []InstagramRecentMediaItem `json:"recent_media"`
+	Diagnostics       map[string]interface{}     `json:"diagnostics"`
+	RetrievedAt       time.Time                  `json:"retrieved_at"`
+}
+
 // WebhookPayload represents an incoming Meta webhook event notification.
 type WebhookPayload struct {
 	Object string         `json:"object"`

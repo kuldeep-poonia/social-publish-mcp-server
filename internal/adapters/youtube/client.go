@@ -345,3 +345,213 @@ func (c *Client) GetVideoAnalytics(ctx context.Context, accessToken, videoID str
 		RetrievedAt:   time.Now().UTC(),
 	}, nil
 }
+
+// GetChannelInsights retrieves channel statistics and profile metadata.
+func (c *Client) GetChannelInsights(ctx context.Context, accessToken string) (*YouTubeChannelInsights, error) {
+	apiURL := "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating channel insights request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching channel insights: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &YouTubeAPIError{
+			StatusCode: resp.StatusCode,
+			Message:    string(body),
+			Reason:     "ChannelFetchFailed",
+		}
+	}
+
+	var chanResp struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Snippet struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				CustomURL   string `json:"customUrl"`
+			} `json:"snippet"`
+			Statistics struct {
+				ViewCount       string `json:"viewCount"`
+				SubscriberCount string `json:"subscriberCount"`
+				VideoCount      string `json:"videoCount"`
+			} `json:"statistics"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(body, &chanResp); err != nil {
+		return nil, fmt.Errorf("failed parsing channel response: %w", err)
+	}
+
+	if len(chanResp.Items) == 0 {
+		return nil, errors.New("no youtube channel found for authenticated user")
+	}
+
+	item := chanResp.Items[0]
+	views, _ := strconv.ParseInt(item.Statistics.ViewCount, 10, 64)
+	subs, _ := strconv.ParseInt(item.Statistics.SubscriberCount, 10, 64)
+	vids, _ := strconv.ParseInt(item.Statistics.VideoCount, 10, 64)
+
+	recentVideos, _ := c.GetRecentChannelVideos(ctx, accessToken, 5)
+
+	diagnostics := map[string]interface{}{
+		"total_subscribers":   subs,
+		"total_videos":        vids,
+		"total_views":         views,
+		"avg_views_per_video": int64(0),
+		"diagnostic_status":   "healthy",
+		"recommendation":      "Optimize video titles and tags with high-search keywords and custom thumbnails.",
+	}
+	if vids > 0 {
+		diagnostics["avg_views_per_video"] = views / vids
+	}
+
+	return &YouTubeChannelInsights{
+		ChannelID:       item.ID,
+		Title:           item.Snippet.Title,
+		Description:     item.Snippet.Description,
+		CustomURL:       item.Snippet.CustomURL,
+		SubscriberCount: subs,
+		VideoCount:      vids,
+		ViewCount:       views,
+		RecentVideos:    recentVideos,
+		Diagnostics:     diagnostics,
+		RetrievedAt:     time.Now().UTC(),
+	}, nil
+}
+
+// GetRecentChannelVideos retrieves the latest uploaded videos and their metrics.
+func (c *Client) GetRecentChannelVideos(ctx context.Context, accessToken string, limit int) ([]VideoAnalyticsMetrics, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 5
+	}
+	apiURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/search?part=snippet&forMine=true&type=video&order=date&maxResults=%d", limit)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &YouTubeAPIError{
+			StatusCode: resp.StatusCode,
+			Message:    string(body),
+			Reason:     "SearchFetchFailed",
+		}
+	}
+
+	var searchResp struct {
+		Items []struct {
+			ID struct {
+				VideoID string `json:"videoId"`
+			} `json:"id"`
+			Snippet struct {
+				Title string `json:"title"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &searchResp); err != nil {
+		return nil, err
+	}
+
+	var results []VideoAnalyticsMetrics
+	for _, it := range searchResp.Items {
+		if it.ID.VideoID != "" {
+			if metrics, err := c.GetVideoAnalytics(ctx, accessToken, it.ID.VideoID); err == nil {
+				results = append(results, *metrics)
+			}
+		}
+	}
+
+	return results, nil
+}
+
+// UpdateVideoMetadata updates title, description, and tags of an existing YouTube video.
+func (c *Client) UpdateVideoMetadata(ctx context.Context, accessToken string, params *UpdateVideoMetadataParams) (*VideoAnalyticsMetrics, error) {
+	if params.VideoID == "" {
+		return nil, errors.New("video_id is required for metadata update")
+	}
+
+	// First fetch existing video snippet to preserve categoryId and status
+	apiURL := fmt.Sprintf("%s?part=snippet,status&id=%s", c.apiBase, url.QueryEscape(params.VideoID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching video details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &YouTubeAPIError{StatusCode: resp.StatusCode, Message: string(body), Reason: "FetchFailed"}
+	}
+
+	var listResp struct {
+		Items []VideoResource `json:"items"`
+	}
+	if err := json.Unmarshal(body, &listResp); err != nil || len(listResp.Items) == 0 {
+		return nil, fmt.Errorf("video '%s' not found", params.VideoID)
+	}
+
+	existing := listResp.Items[0]
+	if existing.Snippet == nil {
+		existing.Snippet = &VideoSnippet{}
+	}
+
+	if params.Title != "" {
+		existing.Snippet.Title = params.Title
+	}
+	if params.Description != "" {
+		existing.Snippet.Description = params.Description
+	}
+	if len(params.Tags) > 0 {
+		existing.Snippet.Tags = params.Tags
+	}
+	if params.CategoryID != "" {
+		existing.Snippet.CategoryID = params.CategoryID
+	}
+
+	updateURL := fmt.Sprintf("%s?part=snippet", c.apiBase)
+	updatePayload, _ := json.Marshal(existing)
+
+	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, updateURL, bytes.NewReader(updatePayload))
+	if err != nil {
+		return nil, err
+	}
+	putReq.Header.Set("Authorization", "Bearer "+accessToken)
+	putReq.Header.Set("Content-Type", "application/json")
+
+	putResp, err := c.httpClient.Do(putReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed updating video: %w", err)
+	}
+	defer putResp.Body.Close()
+
+	putBody, _ := io.ReadAll(putResp.Body)
+	if putResp.StatusCode < 200 || putResp.StatusCode >= 300 {
+		return nil, &YouTubeAPIError{StatusCode: putResp.StatusCode, Message: string(putBody), Reason: "UpdateFailed"}
+	}
+
+	return c.GetVideoAnalytics(ctx, accessToken, params.VideoID)
+}

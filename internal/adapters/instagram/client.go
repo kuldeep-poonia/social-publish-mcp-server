@@ -375,6 +375,170 @@ func (c *Client) GetMediaInsights(ctx context.Context, mediaID, accessToken stri
 	return metrics, nil
 }
 
+// GetAccountProfile queries high-level profile statistics for an Instagram business/creator account.
+func (c *Client) GetAccountProfile(ctx context.Context, igUserID, accessToken string) (*InstagramUserProfile, error) {
+	endpoint := fmt.Sprintf("%s/%s?fields=id,username,name,biography,followers_count,follows_count,media_count,website&access_token=%s",
+		c.apiBase, igUserID, url.QueryEscape(accessToken))
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating profile request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed querying profile: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, parseMetaAPIError(resp.StatusCode, body)
+	}
+
+	var profile InstagramUserProfile
+	if err := json.Unmarshal(body, &profile); err != nil {
+		return nil, fmt.Errorf("failed decoding profile response: %w", err)
+	}
+
+	return &profile, nil
+}
+
+// GetRecentMedia retrieves recent media posts and high-level engagement counts for comparison.
+func (c *Client) GetRecentMedia(ctx context.Context, igUserID, accessToken string, limit int) ([]InstagramRecentMediaItem, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	endpoint := fmt.Sprintf("%s/%s/media?fields=id,caption,media_type,media_product_type,like_count,comments_count,timestamp,permalink&limit=%d&access_token=%s",
+		c.apiBase, igUserID, limit, url.QueryEscape(accessToken))
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating recent media request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed querying recent media: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, parseMetaAPIError(resp.StatusCode, body)
+	}
+
+	var mediaResp struct {
+		Data []InstagramRecentMediaItem `json:"data"`
+	}
+	if err := json.Unmarshal(body, &mediaResp); err != nil {
+		return nil, fmt.Errorf("failed decoding recent media response: %w", err)
+	}
+
+	return mediaResp.Data, nil
+}
+
+// GetAggregatedAccountInsights combines profile data, account insights, recent post trends, and diagnostic ratios.
+func (c *Client) GetAggregatedAccountInsights(ctx context.Context, igUserID, accessToken, period string) (*UnifiedInstagramAccountInsights, error) {
+	if period == "" {
+		period = "days_28"
+	}
+
+	profile, err := c.GetAccountProfile(ctx, igUserID, accessToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed retrieving account profile: %w", err)
+	}
+
+	recentMedia, _ := c.GetRecentMedia(ctx, igUserID, accessToken, 10)
+
+	// Fetch account-level metrics
+	insightsEndpoint := fmt.Sprintf("%s/%s/insights?metric=impressions,reach,profile_views,website_clicks,total_interactions&period=%s&access_token=%s",
+		c.apiBase, igUserID, url.QueryEscape(period), url.QueryEscape(accessToken))
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, insightsEndpoint, nil)
+	var totalReach, totalImpressions, profileViews, websiteClicks, totalInteractions int64
+
+	if err == nil {
+		resp, doErr := c.httpClient.Do(httpReq)
+		if doErr == nil {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				var rawInsights InstagramInsightsResponse
+				if json.Unmarshal(body, &rawInsights) == nil {
+					for _, metric := range rawInsights.Data {
+						var val int64
+						if len(metric.Values) > 0 {
+							val = metric.Values[0].Value
+						} else if metric.TotalValue != nil {
+							val = metric.TotalValue.Value
+						}
+						switch metric.Name {
+						case "reach":
+							totalReach = val
+						case "impressions":
+							totalImpressions = val
+						case "profile_views":
+							profileViews = val
+						case "website_clicks":
+							websiteClicks = val
+						case "total_interactions":
+							totalInteractions = val
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Calculate engagement rate
+	var totalRecentLikes, totalRecentComments int64
+	for _, m := range recentMedia {
+		totalRecentLikes += m.LikeCount
+		totalRecentComments += m.CommentsCount
+	}
+
+	var engagementRate float64
+	if profile.FollowersCount > 0 && len(recentMedia) > 0 {
+		avgInteractionsPerPost := float64(totalRecentLikes+totalRecentComments) / float64(len(recentMedia))
+		engagementRate = (avgInteractionsPerPost / float64(profile.FollowersCount)) * 100.0
+	}
+
+	diagnostics := map[string]interface{}{
+		"followers_count":       profile.FollowersCount,
+		"recent_posts_analyzed": len(recentMedia),
+		"avg_likes_per_post":    0.0,
+		"avg_comments_per_post": 0.0,
+		"diagnostic_status":     "healthy",
+		"recommendation":        "Maintain regular posting schedule and test high-retention Reels.",
+	}
+	if len(recentMedia) > 0 {
+		diagnostics["avg_likes_per_post"] = float64(totalRecentLikes) / float64(len(recentMedia))
+		diagnostics["avg_comments_per_post"] = float64(totalRecentComments) / float64(len(recentMedia))
+	}
+	if profile.FollowersCount > 0 && totalReach > 0 {
+		diagnostics["reach_to_follower_ratio"] = float64(totalReach) / float64(profile.FollowersCount)
+	}
+	if engagementRate < 1.5 && profile.FollowersCount > 100 {
+		diagnostics["diagnostic_status"] = "low_engagement"
+		diagnostics["recommendation"] = "Engagement rate is below standard benchmark (1.5%-3%). Focus on strong hook in first 3 seconds of Reels, interactive carousel slides, and targeted niche hashtags."
+	}
+
+	return &UnifiedInstagramAccountInsights{
+		Profile:           *profile,
+		Period:            period,
+		TotalReach:        totalReach,
+		TotalImpressions:  totalImpressions,
+		ProfileViews:      profileViews,
+		WebsiteClicks:     websiteClicks,
+		TotalInteractions: totalInteractions,
+		EngagementRatePct: engagementRate,
+		RecentMedia:       recentMedia,
+		Diagnostics:       diagnostics,
+		RetrievedAt:       time.Now().UTC(),
+	}, nil
+}
+
 // parseMetaAPIError maps raw HTTP error payloads into structured InstagramAPIError.
 func parseMetaAPIError(statusCode int, body []byte) error {
 	type rawMetaErr struct {

@@ -94,6 +94,29 @@ type ResumableUploadSession struct {
 	VideoID       string
 }
 
+// YouTubeChannelInsights represents channel-level statistics and profile information.
+type YouTubeChannelInsights struct {
+	ChannelID       string                  `json:"channel_id"`
+	Title           string                  `json:"title"`
+	Description     string                  `json:"description"`
+	CustomURL       string                  `json:"custom_url,omitempty"`
+	SubscriberCount int64                   `json:"subscriber_count"`
+	VideoCount      int64                   `json:"video_count"`
+	ViewCount       int64                   `json:"view_count"`
+	RecentVideos    []VideoAnalyticsMetrics `json:"recent_videos"`
+	Diagnostics     map[string]interface{}  `json:"diagnostics"`
+	RetrievedAt     time.Time               `json:"retrieved_at"`
+}
+
+// UpdateVideoMetadataParams contains fields for optimizing YouTube video metadata.
+type UpdateVideoMetadataParams struct {
+	VideoID     string   `json:"video_id"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	CategoryID  string   `json:"category_id,omitempty"`
+}
+
 // YouTubeAPIError encapsulates structured error responses from Google APIs.
 type YouTubeAPIError struct {
 	StatusCode int

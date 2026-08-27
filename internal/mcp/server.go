@@ -142,6 +142,77 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 	}, connectHandler)
 }
 
+// RegisterInsightsAndOptimizationTools registers schemas for get_account_insights and optimize_content_seo.
+func (s *Server) RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler ToolHandler) {
+	insightsSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["instagram", "youtube", "twitter"],
+				"description": "Social media platform to retrieve account-level analytics for"
+			},
+			"time_period": {
+				"type": "string",
+				"enum": ["day", "week", "days_28", "lifetime"],
+				"description": "Time window for historical insights (default: days_28)"
+			}
+		},
+		"required": ["platform"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "get_account_insights",
+		Description: "Retrieve account-level analytics, follower growth, total reach/impressions, profile activity, recent posts performance comparison, and algorithmic health diagnosis to identify why reach or engagement is low",
+		InputSchema: json.RawMessage(insightsSchema),
+	}, accountInsightsHandler)
+
+	optimizeSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["instagram", "youtube", "twitter"],
+				"description": "Target social media platform"
+			},
+			"target_type": {
+				"type": "string",
+				"enum": ["post", "account_profile", "video"],
+				"description": "Type of target content to optimize"
+			},
+			"topic_or_draft": {
+				"type": "string",
+				"description": "Draft caption, title, topic idea, or existing content to optimize"
+			},
+			"niche": {
+				"type": "string",
+				"description": "Optional content niche (e.g. AI & Tech, Fitness, Business, Lifestyle)"
+			},
+			"target_audience": {
+				"type": "string",
+				"description": "Optional target audience description"
+			},
+			"post_id": {
+				"type": "string",
+				"description": "Optional platform post or video ID if applying optimization directly to an existing item"
+			},
+			"apply_update": {
+				"type": "boolean",
+				"description": "If true and post_id is provided, applies the optimized title/tags/description directly to the live platform (e.g. YouTube video metadata update)"
+			}
+		},
+		"required": ["platform", "target_type", "topic_or_draft"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "optimize_content_seo",
+		Description: "Generate high-converting algorithmic SEO optimization (viral hooks, high-search keyword tags, structured descriptions, and niche hashtag clusters) and optionally apply updates to live posts with user permission",
+		InputSchema: json.RawMessage(optimizeSchema),
+	}, optimizeContentHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()

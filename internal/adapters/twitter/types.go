@@ -103,6 +103,35 @@ func (e *TwitterAPIError) Error() string {
 	return fmt.Sprintf("twitter api error (%d): %s", e.StatusCode, e.Title)
 }
 
+// RateLimitError represents a 429 Too Many Requests response with reset timestamp.
+type RateLimitError struct {
+	ResetTime time.Time
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("twitter: rate limit exceeded, resets at %s", e.ResetTime.Format(time.RFC3339))
+}
+
+// TwitterUserProfile represents the authenticated user's profile and public metrics.
+type TwitterUserProfile struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Username       string `json:"username"`
+	Description    string `json:"description"`
+	FollowersCount int    `json:"followers_count"`
+	FollowingCount int    `json:"following_count"`
+	TweetCount     int    `json:"tweet_count"`
+	ListedCount    int    `json:"listed_count"`
+}
+
+// TwitterAccountInsights aggregates profile metrics, recent tweets, and engagement ratios.
+type TwitterAccountInsights struct {
+	Profile      TwitterUserProfile     `json:"profile"`
+	RecentTweets []TweetMetricsResponse `json:"recent_tweets"`
+	Diagnostics  map[string]interface{} `json:"diagnostics"`
+	RetrievedAt  time.Time              `json:"retrieved_at"`
+}
+
 // MediaUploadInitResponse represents response from POST upload.twitter.com INIT command.
 type MediaUploadInitResponse struct {
 	MediaID          int64  `json:"media_id"`

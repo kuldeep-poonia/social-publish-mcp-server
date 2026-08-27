@@ -700,7 +700,212 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}
 	}
 
+	accountInsightsHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required for account insights")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+		ctx = database.WithActor(ctx, database.ActorContext{ActorID: actualUserID, IPAddress: actor.IPAddress})
+
+		platform, _ := args["platform"].(string)
+		period, _ := args["time_period"].(string)
+		if period == "" {
+			period = "days_28"
+		}
+
+		if s.repo == nil {
+			return nil, errors.New("database repository is not initialized")
+		}
+
+		switch platform {
+		case "instagram":
+			accessBytes, _, _, _, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "instagram")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving Instagram connection: %w (please connect Instagram via connect_platform tool first)", err)
+			}
+
+			// Retrieve linked IG User ID
+			igAccount, pageAccessToken, accErr := s.instagramClient.GetInstagramBusinessAccount(ctx, string(accessBytes))
+			if accErr != nil || igAccount == nil {
+				return nil, fmt.Errorf("failed retrieving Instagram business account: %v", accErr)
+			}
+			igUserID := igAccount.ID
+			tokenToUse := string(accessBytes)
+			if pageAccessToken != "" {
+				tokenToUse = pageAccessToken
+			}
+
+			insights, err := s.instagramClient.GetAggregatedAccountInsights(ctx, igUserID, tokenToUse, period)
+			if err != nil {
+				return nil, fmt.Errorf("failed fetching Instagram account insights: %w", err)
+			}
+
+			resultJSON, _ := json.Marshal(insights)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		case "youtube":
+			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving YouTube connection: %w (please connect YouTube via connect_platform tool first)", err)
+			}
+
+			insights, err := s.youtubeClient.GetChannelInsights(ctx, string(accessBytes))
+			if err != nil && len(refreshBytes) > 0 && s.youtubeClient != nil {
+				if newTok, refErr := s.youtubeClient.RefreshToken(ctx, string(refreshBytes)); refErr == nil {
+					_ = s.repo.SavePlatformConnection(ctx, actualUserID, "youtube", []byte(newTok.AccessToken), []byte(newTok.RefreshToken), time.Now().Add(time.Duration(newTok.ExpiresIn)*time.Second), scopes)
+					insights, err = s.youtubeClient.GetChannelInsights(ctx, newTok.AccessToken)
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed fetching YouTube channel insights: %w", err)
+			}
+
+			resultJSON, _ := json.Marshal(insights)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		case "twitter":
+			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "twitter")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving Twitter connection: %w (please connect Twitter via connect_platform tool first)", err)
+			}
+
+			insights, err := s.twitterClient.GetAccountInsights(ctx, string(accessBytes))
+			if err != nil && len(refreshBytes) > 0 && s.twitterClient != nil {
+				if newTok, refErr := s.twitterClient.RefreshToken(ctx, string(refreshBytes)); refErr == nil {
+					_ = s.repo.SavePlatformConnection(ctx, actualUserID, "twitter", []byte(newTok.AccessToken), []byte(newTok.RefreshToken), time.Now().Add(time.Duration(newTok.ExpiresIn)*time.Second), scopes)
+					insights, err = s.twitterClient.GetAccountInsights(ctx, newTok.AccessToken)
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed fetching Twitter account insights: %w", err)
+			}
+
+			resultJSON, _ := json.Marshal(insights)
+			return &mcp.CallToolResult{
+				Content: []mcp.ToolContent{
+					{Type: "text", Text: string(resultJSON)},
+				},
+				IsError: false,
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("platform '%s' is not supported for account insights (supported: 'instagram', 'youtube', 'twitter')", platform)
+		}
+	}
+
+	optimizeContentHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to optimize content")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+		ctx = database.WithActor(ctx, database.ActorContext{ActorID: actualUserID, IPAddress: actor.IPAddress})
+
+		platform, _ := args["platform"].(string)
+		targetType, _ := args["target_type"].(string)
+		topicOrDraft, _ := args["topic_or_draft"].(string)
+		niche, _ := args["niche"].(string)
+		targetAudience, _ := args["target_audience"].(string)
+		postID, _ := args["post_id"].(string)
+		applyUpdate, _ := args["apply_update"].(bool)
+
+		if niche == "" {
+			niche = "General Tech & Lifestyle"
+		}
+		if targetAudience == "" {
+			targetAudience = "Engaged social followers & creators"
+		}
+
+		// Generate algorithmic SEO optimization structure
+		seoOptimization := map[string]interface{}{
+			"platform":        platform,
+			"target_type":     targetType,
+			"original_input":  topicOrDraft,
+			"niche":           niche,
+			"target_audience": targetAudience,
+			"viral_hook_options": []string{
+				fmt.Sprintf("Stop making this mistake with %s 🚨 (Here is what actually works)", topicOrDraft),
+				fmt.Sprintf("The secret to mastering %s nobody is talking about 👇", topicOrDraft),
+				fmt.Sprintf("How I scaled %s without burning out (Step-by-step)", topicOrDraft),
+			},
+			"suggested_tags": []string{
+				strings.ToLower(strings.ReplaceAll(platform, " ", "")),
+				"growth",
+				"viral",
+				"tips",
+				"creator",
+				"trends2026",
+			},
+			"recommended_hashtags":        fmt.Sprintf("#%s #growth #creator #trending #viral #%s", strings.ToLower(platform), strings.ToLower(strings.ReplaceAll(niche, " ", ""))),
+			"posting_time_recommendation": "Best posting windows: 8:00-9:30 AM (commute) or 6:00-8:30 PM (evening peak local time).",
+			"optimization_applied":        false,
+		}
+
+		// If platform is YouTube and user requested live metadata update
+		if platform == "youtube" && postID != "" && applyUpdate {
+			accessBytes, refreshBytes, _, scopes, err := s.repo.GetDecryptedPlatformConnection(ctx, actualUserID, "youtube")
+			if err != nil {
+				return nil, fmt.Errorf("failed retrieving YouTube credentials for update: %w", err)
+			}
+
+			updateParams := &youtube.UpdateVideoMetadataParams{
+				VideoID:     postID,
+				Title:       topicOrDraft,
+				Description: fmt.Sprintf("%s\n\nFollow for more updates!\n%s", topicOrDraft, seoOptimization["recommended_hashtags"]),
+				Tags:        []string{"growth", "trending", "viral", strings.ToLower(niche)},
+			}
+
+			updatedMetrics, err := s.youtubeClient.UpdateVideoMetadata(ctx, string(accessBytes), updateParams)
+			if err != nil && len(refreshBytes) > 0 && s.youtubeClient != nil {
+				if newTok, refErr := s.youtubeClient.RefreshToken(ctx, string(refreshBytes)); refErr == nil {
+					_ = s.repo.SavePlatformConnection(ctx, actualUserID, "youtube", []byte(newTok.AccessToken), []byte(newTok.RefreshToken), time.Now().Add(time.Duration(newTok.ExpiresIn)*time.Second), scopes)
+					updatedMetrics, err = s.youtubeClient.UpdateVideoMetadata(ctx, newTok.AccessToken, updateParams)
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed applying live YouTube metadata update: %w", err)
+			}
+
+			seoOptimization["optimization_applied"] = true
+			seoOptimization["live_updated_video"] = updatedMetrics
+		}
+
+		resultJSON, _ := json.Marshal(seoOptimization)
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler)
+	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
 }
 
 // Start runs the HTTP server.

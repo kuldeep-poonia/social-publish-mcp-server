@@ -203,5 +203,88 @@ func TestMCP_CrossClientInteroperability(t *testing.T) {
 		t.Logf("[Client 2: Claude Desktop SSE Stream] Connected, session established, initialize verified over SSE. (Success: 100%%)")
 	})
 
+	// ========================================================================
+	// CLIENT 3: CLAUDE AI STREAMABLE HTTP POST CLIENT (Discover, Init, Notify, SEO)
+	// ========================================================================
+	t.Run("Client3_Claude_StreamableHTTP_DiscoverAndOptimize", func(t *testing.T) {
+		mcpServer.RegisterInsightsAndOptimizationTools(
+			func(ctx context.Context, args map[string]interface{}) (*CallToolResult, error) {
+				return &CallToolResult{
+					Content: []ToolContent{{Type: "text", Text: `{"status":"ok","total_reach":45000}`}},
+				}, nil
+			},
+			func(ctx context.Context, args map[string]interface{}) (*CallToolResult, error) {
+				return &CallToolResult{
+					Content: []ToolContent{{Type: "text", Text: `{"status":"ok","viral_hooks":["Hook 1"]}`}},
+				}, nil
+			},
+		)
+
+		// 1. server/discover
+		discReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "server/discover",
+		}
+		discBytes, _ := json.Marshal(discReq)
+		resp, err := http.Post(ts.URL+"/mcp/sse", "application/json", bytes.NewReader(discBytes))
+		if err != nil || resp.StatusCode != http.StatusOK {
+			t.Fatalf("server/discover failed: status=%d, err=%v", resp.StatusCode, err)
+		}
+		resp.Body.Close()
+
+		// 2. initialize with Claude protocolVersion
+		initReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      2,
+			"method":  "initialize",
+			"params": map[string]interface{}{
+				"protocolVersion": "2025-11-25",
+				"clientInfo": map[string]string{
+					"name": "Anthropic/ClaudeAI",
+				},
+			},
+		}
+		initBytes, _ := json.Marshal(initReq)
+		resp2, err := http.Post(ts.URL+"/mcp/sse", "application/json", bytes.NewReader(initBytes))
+		if err != nil || resp2.StatusCode != http.StatusOK {
+			t.Fatalf("initialize over /mcp/sse failed: status=%d, err=%v", resp2.StatusCode, err)
+		}
+		resp2.Body.Close()
+
+		// 3. notifications/initialized (verifies nil check without panic)
+		notifReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "notifications/initialized",
+		}
+		notifBytes, _ := json.Marshal(notifReq)
+		resp3, err := http.Post(ts.URL+"/mcp/sse", "application/json", bytes.NewReader(notifBytes))
+		if err != nil || resp3.StatusCode != http.StatusAccepted {
+			t.Fatalf("notifications/initialized failed: status=%d, err=%v", resp3.StatusCode, err)
+		}
+		resp3.Body.Close()
+
+		// 4. tools/call get_account_insights
+		callReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      4,
+			"method":  "tools/call",
+			"params": map[string]interface{}{
+				"name": "get_account_insights",
+				"arguments": map[string]interface{}{
+					"platform": "instagram",
+				},
+			},
+		}
+		callBytes, _ := json.Marshal(callReq)
+		resp4, err := http.Post(ts.URL+"/mcp/sse", "application/json", bytes.NewReader(callBytes))
+		if err != nil || resp4.StatusCode != http.StatusOK {
+			t.Fatalf("tools/call get_account_insights failed: status=%d, err=%v", resp4.StatusCode, err)
+		}
+		resp4.Body.Close()
+
+		t.Logf("[Client 3: Claude Streamable HTTP] server/discover, initialize, notification, and get_account_insights verified cleanly.")
+	})
+
 	t.Logf("================================================================================")
 }
