@@ -744,11 +744,26 @@ func (s *HTTPServer) telemetryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
-	baseURL := strings.TrimRight(s.cfg.PublicBaseURL, "/")
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://localhost:%d", s.cfg.ServerPort)
+func (s *HTTPServer) getBaseURL(r *http.Request) string {
+	if s.cfg.PublicBaseURL != "" {
+		return strings.TrimRight(s.cfg.PublicBaseURL, "/")
 	}
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" && !strings.Contains(r.Host, "duckdns.org") && !strings.Contains(r.Host, "onrender.com") && !strings.Contains(r.Host, ".com") && !strings.Contains(r.Host, ".org") {
+		scheme = "http"
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	if host == "" {
+		host = fmt.Sprintf("localhost:%d", s.cfg.ServerPort)
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
+	baseURL := s.getBaseURL(r)
 
 	metadata := map[string]interface{}{
 		"issuer":                                baseURL,
@@ -808,6 +823,8 @@ func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request)
 	resp := map[string]interface{}{
 		"client_id":                  clientID,
 		"client_secret":              clientSecret,
+		"client_id_issued_at":        time.Now().Unix(),
+		"client_secret_expires_at":   0,
 		"client_name":                name,
 		"redirect_uris":              req.RedirectURIs,
 		"grant_types":                []string{"authorization_code", "refresh_token"},
