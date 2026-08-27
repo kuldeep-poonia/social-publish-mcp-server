@@ -314,3 +314,73 @@ func TestServer_Publish_SyncFirstTransientRetryQueue(t *testing.T) {
 		t.Fatalf("expected HTTP 200 OK from MCP JSON-RPC endpoint, got %d", resp.StatusCode)
 	}
 }
+
+func TestServer_OpenAPIAndChatGPTIntegration(t *testing.T) {
+	cfg := &config.Config{
+		ServerHost:       "127.0.0.1",
+		ServerPort:       8080,
+		PublicBaseURL:    "https://social-mcp.duckdns.org",
+		JWTSigningSecret: []byte("test-signing-secret-minimum-32-chars-long"),
+	}
+
+	httpServer := NewHTTPServer(cfg, nil, nil)
+	ts := httptest.NewServer(httpServer.server.Handler)
+	defer ts.Close()
+
+	// 1. Test OpenAPI Spec Discovery
+	resp, err := http.Get(ts.URL + "/openapi.json")
+	if err != nil {
+		t.Fatalf("GET /openapi.json failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on /openapi.json, got %d", resp.StatusCode)
+	}
+
+	var openAPIDoc struct {
+		OpenAPI string                 `json:"openapi"`
+		Info    map[string]interface{} `json:"info"`
+		Paths   map[string]interface{} `json:"paths"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&openAPIDoc); err != nil {
+		t.Fatalf("failed decoding openapi.json: %v", err)
+	}
+
+	if openAPIDoc.OpenAPI != "3.0.3" {
+		t.Errorf("expected OpenAPI version 3.0.3, got %s", openAPIDoc.OpenAPI)
+	}
+
+	if _, exists := openAPIDoc.Paths["/api/v1/publish"]; !exists {
+		t.Errorf("missing /api/v1/publish in openapi.json paths")
+	}
+	if _, exists := openAPIDoc.Paths["/api/v1/insights"]; !exists {
+		t.Errorf("missing /api/v1/insights in openapi.json paths")
+	}
+	if _, exists := openAPIDoc.Paths["/api/v1/optimize"]; !exists {
+		t.Errorf("missing /api/v1/optimize in openapi.json paths")
+	}
+
+	// 2. Test Privacy Policy
+	pResp, pErr := http.Get(ts.URL + "/privacy")
+	if pErr != nil || pResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /privacy failed: status=%d, err=%v", pResp.StatusCode, pErr)
+	}
+	pResp.Body.Close()
+
+	// 3. Test Terms of Service
+	tResp, tErr := http.Get(ts.URL + "/terms")
+	if tErr != nil || tResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /terms failed: status=%d, err=%v", tResp.StatusCode, tErr)
+	}
+	tResp.Body.Close()
+
+	// 4. Test Connect endpoint
+	cResp, cErr := http.Get(ts.URL + "/api/v1/connect?platform=instagram")
+	if cErr != nil || cResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/v1/connect failed: status=%d, err=%v", cResp.StatusCode, cErr)
+	}
+	cResp.Body.Close()
+
+	t.Logf("PASS: Verified ChatGPT OpenAPI 3.0.3, Privacy, Terms, and Connect REST API Endpoints.")
+}
