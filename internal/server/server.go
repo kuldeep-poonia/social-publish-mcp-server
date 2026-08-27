@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -936,16 +937,21 @@ func (s *HTTPServer) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req auth.TokenExchangeRequest
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		_ = json.NewDecoder(r.Body).Decode(&req)
-	} else {
-		_ = r.ParseForm()
-		req.GrantType = r.FormValue("grant_type")
-		req.Code = r.FormValue("code")
-		req.ClientID = r.FormValue("client_id")
-		req.CodeVerifier = r.FormValue("code_verifier")
-		req.RedirectURI = r.FormValue("redirect_uri")
-		req.RefreshToken = r.FormValue("refresh_token")
+	bodyBytes, _ := io.ReadAll(r.Body)
+	_ = json.Unmarshal(bodyBytes, &req)
+
+	if req.GrantType == "" {
+		vals, _ := url.ParseQuery(string(bodyBytes))
+		req.GrantType = vals.Get("grant_type")
+		req.Code = vals.Get("code")
+		req.ClientID = vals.Get("client_id")
+		req.CodeVerifier = vals.Get("code_verifier")
+		req.RedirectURI = vals.Get("redirect_uri")
+		req.RefreshToken = vals.Get("refresh_token")
+	}
+
+	if req.GrantType == "" && req.Code != "" {
+		req.GrantType = "authorization_code"
 	}
 
 	// Use in-memory store for skeleton or repository for DB

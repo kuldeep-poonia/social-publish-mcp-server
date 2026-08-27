@@ -64,24 +64,24 @@ type AuthCodeRecord struct {
 
 // AuthorizeRequest contains query parameters for the /oauth/authorize endpoint.
 type AuthorizeRequest struct {
-	ResponseType        string
-	ClientID            string
-	RedirectURI         string
-	Scope               string
-	State               string
-	CodeChallenge       string
-	CodeChallengeMethod string
-	UserID              string // Authenticated user initiating authorization
+	ResponseType        string `json:"response_type"`
+	ClientID            string `json:"client_id"`
+	RedirectURI         string `json:"redirect_uri"`
+	Scope               string `json:"scope"`
+	State               string `json:"state"`
+	CodeChallenge       string `json:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method"`
+	UserID              string `json:"user_id"` // Authenticated user initiating authorization
 }
 
 // TokenExchangeRequest contains parameters for the /oauth/token endpoint.
 type TokenExchangeRequest struct {
-	GrantType    string
-	Code         string
-	ClientID     string
-	CodeVerifier string
-	RedirectURI  string
-	RefreshToken string
+	GrantType    string `json:"grant_type"`
+	Code         string `json:"code"`
+	ClientID     string `json:"client_id"`
+	CodeVerifier string `json:"code_verifier"`
+	RedirectURI  string `json:"redirect_uri"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 // OAuthServer manages OAuth 2.1 client registration, authorization codes, and token issuance.
