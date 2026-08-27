@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Publishing MCP Server — The AI Publishing Gateway</title>
+  <meta name="description" content="A clean, secure Model Context Protocol gateway allowing AI assistants like Claude Desktop and ChatGPT to publish content and fetch analytics across Twitter, YouTube, and Instagram.">
+  <meta name="author" content="Kuldeep Poonia">
+
+  <!-- Google Fonts: Inter Display & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <style>
+    /* ==========================================================================
+       Social Publishing MCP Server — Apple Light Minimalist Embedded Styles
+       ========================================================================== */
+    :root {
+      --bg-pure: #ffffff;
+      --bg-light: #fbfbfd;
+      --bg-secondary: #f5f5f7;
+      --bg-elevated: #ffffff;
+      --bg-glass: rgba(255, 255, 255, 0.85);
+      
+      --border-light: rgba(0, 0, 0, 0.08);
+      --border-subtle: #e5e5ea;
+      --border-strong: #d2d2d7;
+      
+      --text-main: #1d1d1f;
+      --text-secondary: #515154;
+      --text-muted: #86868b;
+      
+      --apple-blue: #0071e3;
+      --apple-green: #34c759;
+      --apple-red: #ff3b30;
+      
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+      
+      --radius-capsule: 9999px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      
+      --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+      background-color: var(--bg-pure);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      position: relative;
+      min-height: 100vh;
+      line-height: 1.5;
+      background: var(--bg-pure);
+      color: var(--text-main);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Apple Light Navbar */
+    .navbar-wrapper {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+    }
+
+    .logo-text strong {
+      font-weight: 800;
+    }
+
+    .nav-menu {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .nav-menu a {
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: color 0.2s var(--ease-apple);
+    }
+
+    .nav-menu a:hover {
+      color: var(--text-main);
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-icon-link {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 1rem;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .nav-icon-link:hover {
+      background: var(--border-subtle);
+    }
+
+    .nav-action-btn {
+      background: #000;
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: var(--radius-capsule);
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .nav-action-btn:hover {
+      background: #2a2a2e;
+      transform: scale(1.02);
+    }
+
+    /* Hero Section */
+    .hero-section {
+      padding: 140px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      background: var(--bg-pure);
+    }
+
+    .hero-center {
+      max-width: 840px;
+      margin-bottom: 50px;
+    }
+
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: var(--radius-capsule);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--apple-green);
+    }
+
+    .hero-title {
+      font-size: 4.2rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.06;
+      margin-bottom: 20px;
+      color: var(--text-main);
+    }
+
+    .hero-gradient-text {
+      color: var(--text-muted);
+    }
+
+    .hero-description {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      max-width: 720px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    .hero-button-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .btn-apple-black {
+      display: inline-flex;
+      align-items: center;
+      background: #000;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: var(--radius-capsule);
+      text-decoration: none;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-apple-black:hover {
+      background: #2a2a2e;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-apple-outline {
+      display: inline-flex;
+      align-items: center;
+      background: #fff;
+      color: var(--text-main);
+      border: 1px solid var(--border-strong);
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: var(--radius-capsule);
+      text-decoration: none;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-apple-outline:hover {
+      background: var(--bg-secondary);
+      border-color: #a1a1a6;
+      transform: translateY(-2px);
+    }
+
+    /* Demo Window */
+    .demo-window-container {
+      width: 100%;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .demo-window {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+      text-align: left;
+    }
+
+    .window-header {
+      background: var(--bg-secondary);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .window-buttons {
+      display: flex;
+      gap: 7px;
+    }
+
+    .btn-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .btn-dot.close { background: #ff5f56; }
+    .btn-dot.min { background: #ffbd2e; }
+    .btn-dot.max { background: #27c93f; }
+
+    .window-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .window-badge {
+      font-size: 0.75rem;
+      color: var(--apple-green);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--apple-green);
+    }
+
+    .window-body {
+      padding: 24px;
+      background: #ffffff;
+    }
+
+    .chat-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chat-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .chat-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .chat-card {
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .user-bubble {
+      background: var(--bg-secondary);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .ai-bubble {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+    }
+
+    .ai-intro {
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .step-card {
+      background: var(--bg-light);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 10px;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .platform-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .platform-tag.yt { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
+    .platform-tag.x { background: rgba(0, 0, 0, 0.08); color: #000; }
+    .platform-tag.ig { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
+
+    .step-speed {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .progress-line {
+      width: 100%;
+      height: 4px;
+      background: var(--border-subtle);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: #34c759;
+    }
+
+    .step-result {
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .text-success { color: #28a745; }
+
+    .action-bar {
+      background: var(--bg-light);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-bar-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .action-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .action-chip {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: var(--radius-capsule);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .action-chip.active, .action-chip:hover {
+      background: #000;
+      color: #fff;
+      border-color: #000;
+    }
+
+    /* Platforms Section */
+    .platforms-section {
+      padding: 100px 24px;
+      background: var(--bg-light);
+      border-top: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .text-center { text-align: center; }
+
+    .section-heading-wrap {
+      max-width: 640px;
+      margin: 0 auto 50px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--apple-blue);
+      margin-bottom: 10px;
+    }
+
+    .heading-title {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 14px;
+      color: var(--text-main);
+    }
+
+    .heading-sub {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    .platforms-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .platform-box {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 36px 28px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+      transition: all 0.25s var(--ease-apple);
+    }
+
+    .platform-box:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+      border-color: var(--border-strong);
+    }
+
+    .platform-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      margin-bottom: 20px;
+    }
+
+    .x-bg { background: rgba(0, 0, 0, 0.06); color: #000; }
+    .yt-bg { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
+    .ig-bg { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
+
+    .platform-name {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .platform-info {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .feature-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .feature-bullets li {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .feature-bullets li i {
+      color: var(--apple-green);
+      margin-top: 3px;
+      font-size: 0.8rem;
+    }
+
+    /* Integration Section */
+    .integration-section {
+      padding: 80px 24px;
+    }
+
+    .integration-card {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 44px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+    }
+
+    .int-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .int-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .int-sub {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+
+    .btn-copy-config {
+      background: #000;
+      color: #fff;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: var(--radius-capsule);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-copy-config:hover {
+      background: #333;
+    }
+
+    .code-box pre {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-main);
+      overflow-x: auto;
+    }
+
+    /* Pricing Section */
+    .pricing-section {
+      padding: 100px 24px 120px;
+      background: var(--bg-light);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .pricing-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .price-box {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 36px 28px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: all 0.25s var(--ease-apple);
+    }
+
+    .price-box:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .featured-box {
+      border-color: #000;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    .popular-ribbon {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: var(--radius-capsule);
+      letter-spacing: 0.04em;
+    }
+
+    .tier-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .tier-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .tier-cost {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .tier-cost span {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    .tier-summary {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      min-height: 42px;
+    }
+
+    .tier-perks {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 30px;
+      flex-grow: 1;
+    }
+
+    .tier-perks li {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tier-perks li i {
+      color: var(--apple-green);
+      font-size: 0.8rem;
+    }
+
+    .btn-price-solid {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: var(--radius-capsule);
+      text-decoration: none;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-price-solid:hover {
+      background: #333;
+    }
+
+    .btn-price-outline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      color: var(--text-main);
+      border: 1px solid var(--border-strong);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: var(--radius-capsule);
+      text-decoration: none;
+      transition: all 0.2s var(--ease-apple);
+    }
+
+    .btn-price-outline:hover {
+      background: var(--bg-secondary);
+      border-color: #000;
+    }
+
+    /* Clean Footer */
+    .footer-wrapper {
+      background: #ffffff;
+      border-top: 1px solid var(--border-subtle);
+      padding: 70px 0 30px;
+    }
+
+    .footer-top {
+      display: grid;
+      grid-template-columns: 1.3fr 2.7fr;
+      gap: 60px;
+      margin-bottom: 50px;
+    }
+
+    .footer-brand-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      max-width: 300px;
+      margin: 12px 0 16px;
+      line-height: 1.5;
+    }
+
+    .footer-operational-status {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--apple-green);
+    }
+
+    .footer-nav-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .footer-nav-col h4 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .footer-nav-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .footer-nav-col a {
+      text-decoration: none;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      transition: color 0.2s var(--ease-apple);
+    }
+
+    .footer-nav-col a:hover {
+      color: #000;
+    }
+
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-light);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Toast Capsule */
+    .toast-popup {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #000;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: var(--radius-capsule);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s var(--ease-apple);
+      z-index: 2000;
+    }
+
+    .toast-popup.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Responsive Queries */
+    @media (max-width: 992px) {
+      .hero-title { font-size: 3rem; }
+      .platforms-cards-grid { grid-template-columns: 1fr; }
+      .pricing-cards-grid { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .nav-menu { display: none; }
+      .hero-title { font-size: 2.3rem; }
+      .hero-description { font-size: 1.05rem; }
+      .footer-nav-grid { grid-template-columns: 1fr; }
+      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Apple Light Frosted Navigation Bar -->
+  <header class="navbar-wrapper">
+    <nav class="navbar container">
+      <a href="#" class="brand-logo">
+        <div class="logo-mark">
+          <i class="fa-solid fa-cube"></i>
+        </div>
+        <span class="logo-text">Social <strong>MCP</strong></span>
+      </a>
+
+      <div class="nav-menu">
+        <a href="#features">Capabilities</a>
+        <a href="#demo">Live Demo</a>
+        <a href="#integration">Integration</a>
+        <a href="#pricing">License</a>
+        <a href="USER_GUIDE.md">User Guide</a>
+        <a href="SECURITY.md">Security</a>
+      </div>
+
+      <div class="nav-right">
+        <a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank" class="nav-icon-link" title="GitHub Repository">
+          <i class="fa-brands fa-github"></i>
+        </a>
+        <a href="#pricing" class="nav-action-btn">Get License</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section container">
+    <div class="hero-center">
+      <div class="pill-badge">
+        <span class="pill-dot"></span>
+        <span>Model Context Protocol 2024-11-05 • Pure Go 1.26.6</span>
+      </div>
+
+      <h1 class="hero-title">
+        The publishing engine <br>
+        <span class="hero-gradient-text">for artificial intelligence.</span>
+      </h1>
+
+      <p class="hero-description">
+        Connect Claude Desktop, ChatGPT, and AI agents directly to Twitter/X, YouTube, and Instagram. Zero-trust AES-256 token vault, kernel-level SSRF defense, and microsecond latency.
+      </p>
+
+      <div class="hero-button-group">
+        <a href="#pricing" class="btn-apple-black">Get Commercial License</a>
+        <a href="#demo" class="btn-apple-outline">Try Interactive Demo</a>
+      </div>
+    </div>
+
+    <!-- Apple Light Software Window Demo -->
+    <div class="demo-window-container" id="demo">
+      <div class="demo-window">
+        <!-- Mac Chrome Header -->
+        <div class="window-header">
+          <div class="window-buttons">
+            <span class="btn-dot close"></span>
+            <span class="btn-dot min"></span>
+            <span class="btn-dot max"></span>
+          </div>
+          <div class="window-title">Claude Desktop + Social MCP Gateway</div>
+          <div class="window-badge">
+            <span class="live-dot"></span> Connected
+          </div>
+        </div>
+
+        <!-- Terminal Chat Stream -->
+        <div class="window-body">
+          <div class="chat-thread" id="chat-thread">
+            <!-- User Message -->
+            <div class="chat-row user-side">
+              <div class="chat-label">You</div>
+              <div class="chat-card user-bubble">
+                Upload our 120MB video to YouTube with title "Autonomous Go Architecture", and cross-post a teaser tweet to Twitter with our image banner.
+              </div>
+            </div>
+
+            <!-- AI Message -->
+            <div class="chat-row ai-side">
+              <div class="chat-label">Claude (via Social MCP)</div>
+              <div class="chat-card ai-bubble">
+                <p class="ai-intro">Executing simultaneous multi-platform publishing:</p>
+
+                <!-- YouTube Step Card -->
+                <div class="step-card">
+                  <div class="step-header">
+                    <span class="platform-tag yt"><i class="fa-brands fa-youtube"></i> YouTube (Data API v3)</span>
+                    <span class="step-speed">8MB Resumable Chunks</span>
+                  </div>
+                  <div class="progress-line">
+                    <div class="progress-bar-fill" style="width: 100%;"></div>
+                  </div>
+                  <div class="step-result text-success">
+                    <i class="fa-solid fa-circle-check"></i> Uploaded Video ID: <strong>yt_v90281a</strong> • Quota Reserved: 1,600 / 10,000
+                  </div>
+                </div>
+
+                <!-- Twitter Step Card -->
+                <div class="step-card">
+                  <div class="step-header">
+                    <span class="platform-tag x"><i class="fa-brands fa-x-twitter"></i> Twitter / X (API v2)</span>
+                    <span class="step-speed">14ms Direct Dispatch</span>
+                  </div>
+                  <div class="step-result text-success">
+                    <i class="fa-solid fa-circle-check"></i> Published Tweet ID: <strong>1894726190283741184</strong> • Idempotency Lock: ACQUIRED
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Action Switcher -->
+          <div class="action-bar">
+            <span class="action-bar-label">Simulate Action:</span>
+            <div class="action-chips">
+              <button class="action-chip active" data-action="combo">
+                <i class="fa-brands fa-youtube"></i> + <i class="fa-brands fa-x-twitter"></i> YouTube &amp; Twitter Cross-Post
+              </button>
+              <button class="action-chip" data-action="instagram">
+                <i class="fa-brands fa-instagram"></i> Instagram Reel &amp; JPEG Transcode
+              </button>
+              <button class="action-chip" data-action="analytics">
+                <i class="fa-solid fa-chart-simple"></i> Query Multi-Network Analytics
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 Core Platforms Section -->
+  <section class="platforms-section" id="features">
+    <div class="container">
+      <div class="section-heading-wrap text-center">
+        <span class="eyebrow">Supported Networks</span>
+        <h2 class="heading-title">Engineered natively for each platform.</h2>
+        <p class="heading-sub">Deep, direct integration with platform constraints, rate limits, and media pipelines.</p>
+      </div>
+
+      <div class="platforms-cards-grid">
+        <!-- Twitter / X Card -->
+        <div class="platform-box">
+          <div class="platform-icon-wrap x-bg">
+            <i class="fa-brands fa-x-twitter"></i>
+          </div>
+          <h3 class="platform-name">Twitter / X (API v2)</h3>
+          <p class="platform-info">Publish standalone tweets, status updates, and multi-image attachments compatible with Free, Basic, and Pro tiers.</p>
+          <ul class="feature-bullets">
+            <li><i class="fa-solid fa-check"></i> Transactional idempotency locks preventing duplicate posts</li>
+            <li><i class="fa-solid fa-check"></i> Automatic chunked media uploading with dimension validation</li>
+            <li><i class="fa-solid fa-check"></i> Real-time impressions, retweets, likes, and reply metrics</li>
+          </ul>
+        </div>
+
+        <!-- YouTube Card -->
+        <div class="platform-box">
+          <div class="platform-icon-wrap yt-bg">
+            <i class="fa-brands fa-youtube"></i>
+          </div>
+          <h3 class="platform-name">YouTube (Upload &amp; Data v3)</h3>
+          <p class="platform-info">Google Resumable Chunked Upload protocol streaming long-form videos and YouTube Shorts with minimal memory footprint.</p>
+          <ul class="feature-bullets">
+            <li><i class="fa-solid fa-check"></i> 8MB streaming chunks with under 1.0MB heap allocation delta</li>
+            <li><i class="fa-solid fa-check"></i> Resumes failed transfers seamlessly with zero duplicate quota waste</li>
+            <li><i class="fa-solid fa-check"></i> Daily 10,000 quota budget tracker with automated refunds</li>
+          </ul>
+        </div>
+
+        <!-- Instagram Card -->
+        <div class="platform-box">
+          <div class="platform-icon-wrap ig-bg">
+            <i class="fa-brands fa-instagram"></i>
+          </div>
+          <h3 class="platform-name">Instagram (Meta Graph v20.0)</h3>
+          <p class="platform-info">Feed photo, carousel, and video Reel publishing with automatic PNG-to-JPEG format transcoding.</p>
+          <ul class="feature-bullets">
+            <li><i class="fa-solid fa-check"></i> Automatic PNG-to-JPEG conversion satisfying Meta aspect ratios</li>
+            <li><i class="fa-solid fa-check"></i> Two-stage container creation and async state polling</li>
+            <li><i class="fa-solid fa-check"></i> Full engagement analytics: reach, impressions, likes, shares, saves</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1-Minute Claude Integration -->
+  <section class="integration-section" id="integration">
+    <div class="container">
+      <div class="integration-card">
+        <div class="int-header">
+          <div>
+            <span class="eyebrow">Quick Setup</span>
+            <h2 class="int-title">Add to Claude Desktop in 60 seconds.</h2>
+            <p class="int-sub">Paste this configuration block into your <code>claude_desktop_config.json</code> file.</p>
+          </div>
+          <button class="btn-copy-config" id="btn-copy-config">
+            <i class="fa-regular fa-copy"></i>
+            <span>Copy Config</span>
+          </button>
+        </div>
+
+        <div class="code-box">
+          <pre><code>{
+  "mcpServers": {
+    "social-publisher": {
+      "command": "docker",
+      "args": ["exec", "-i", "social_mcp_app", "/app/social-mcp-server"]
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section class="pricing-section" id="pricing">
+    <div class="container">
+      <div class="section-heading-wrap text-center">
+        <span class="eyebrow">Commercial Licensing</span>
+        <h2 class="heading-title">Simple. Transparent. Perpetual.</h2>
+        <p class="heading-sub">Host on your own cloud or server with zero recurring markups. Direct perpetual commercial licenses.</p>
+      </div>
+
+      <div class="pricing-cards-grid">
+        <!-- Solo Tier -->
+        <div class="price-box">
+          <div class="tier-badge">Creator</div>
+          <h3 class="tier-title">Solo License</h3>
+          <div class="tier-cost">$49 <span>/ one-time</span></div>
+          <p class="tier-summary">For individual developers, creators, and builders automating personal channels.</p>
+          <ul class="tier-perks">
+            <li><i class="fa-solid fa-check"></i> Twitter/X, YouTube &amp; Instagram Adapters</li>
+            <li><i class="fa-solid fa-check"></i> Pre-Compiled Docker Container Binaries</li>
+            <li><i class="fa-solid fa-check"></i> Claude Desktop &amp; Cursor Integration</li>
+            <li><i class="fa-solid fa-check"></i> AES-256-GCM Token Vault</li>
+            <li><i class="fa-solid fa-check"></i> Complete Documentation &amp; User Guide</li>
+          </ul>
+          <a href="mailto:licensing@socialmcp.io?subject=Solo%20Creator%20License%20Purchase" class="btn-price-outline">Purchase Solo License</a>
+        </div>
+
+        <!-- Pro Business Tier (Featured) -->
+        <div class="price-box featured-box">
+          <div class="popular-ribbon">Recommended</div>
+          <div class="tier-badge">Business</div>
+          <h3 class="tier-title">Pro Business</h3>
+          <div class="tier-cost">$149 <span>/ perpetual</span></div>
+          <p class="tier-summary">For marketing automation teams, startups, and agencies managing multi-account fleets.</p>
+          <ul class="tier-perks">
+            <li><i class="fa-solid fa-check"></i> Everything in Solo Creator Tier</li>
+            <li><i class="fa-solid fa-check"></i> Multi-Tenant Actor Session Context Isolation</li>
+            <li><i class="fa-solid fa-check"></i> Redis 7 Stream Retry Queue &amp; DLQ</li>
+            <li><i class="fa-solid fa-check"></i> Prometheus &amp; Grafana Production Dashboards</li>
+            <li><i class="fa-solid fa-check"></i> 1 Year of Minor Version Updates</li>
+            <li><i class="fa-solid fa-check"></i> Priority Email Implementation Support</li>
+          </ul>
+          <a href="mailto:licensing@socialmcp.io?subject=Pro%20Business%20License%20Purchase" class="btn-price-solid">Acquire Pro License</a>
+        </div>
+
+        <!-- Enterprise Tier -->
+        <div class="price-box">
+          <div class="tier-badge">Enterprise</div>
+          <h3 class="tier-title">Custom Enterprise</h3>
+          <div class="tier-cost">Custom</div>
+          <p class="tier-summary">For high-scale enterprises requiring custom platform adapters, SLAs, and source code access.</p>
+          <ul class="tier-perks">
+            <li><i class="fa-solid fa-check"></i> Full Source Code Access &amp; Modification Rights</li>
+            <li><i class="fa-solid fa-check"></i> Custom Social Platform Adapter Engineering</li>
+            <li><i class="fa-solid fa-check"></i> Kubernetes Multi-Cluster Helm Deployment</li>
+            <li><i class="fa-solid fa-check"></i> 99.99% Architecture SLA &amp; Dedicated Slack</li>
+            <li><i class="fa-solid fa-check"></i> Custom Secret Manager Integration (Vault/AWS)</li>
+          </ul>
+          <a href="mailto:licensing@socialmcp.io?subject=Enterprise%20Commercial%20Inquiry" class="btn-price-outline">Contact Enterprise Sales</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Clean Apple-Style Minimalist Footer -->
+  <footer class="footer-wrapper">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand-col">
+          <div class="brand-logo">
+            <div class="logo-mark"><i class="fa-solid fa-cube"></i></div>
+            <span class="logo-text">Social <strong>MCP</strong></span>
+          </div>
+          <p class="footer-brand-desc">The production-grade Model Context Protocol gateway for autonomous AI social publishing.</p>
+          <div class="footer-operational-status">
+            <span class="status-dot"></span> All Systems Operational • MCP Specification 2024-11-05
+          </div>
+        </div>
+
+        <div class="footer-nav-grid">
+          <div class="footer-nav-col">
+            <h4>Documentation</h4>
+            <ul>
+              <li><a href="USER_GUIDE.md">User Guide</a></li>
+              <li><a href="ARCHITECTURE.md">Architecture Specification</a></li>
+              <li><a href="FAQ.md">Frequently Asked Questions</a></li>
+              <li><a href="INCIDENT_RESPONSE.md">Incident Response Runbooks</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-nav-col">
+            <h4>Security &amp; Legal</h4>
+            <ul>
+              <li><a href="SECURITY.md">Security Policy &amp; Threat Model</a></li>
+              <li><a href="PEN_TEST_REPORT.md">Penetration Test Report</a></li>
+              <li><a href="PRIVACY_POLICY.md">Privacy Policy</a></li>
+              <li><a href="LICENSE">Commercial License</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-nav-col">
+            <h4>Inquiries</h4>
+            <ul>
+              <li><a href="mailto:licensing@socialmcp.io">Commercial: licensing@socialmcp.io</a></li>
+              <li><a href="mailto:security@socialmcp.io">Security: security@socialmcp.io</a></li>
+              <li><a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank">GitHub Repository</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2026 Kuldeep Poonia. All rights reserved. Commercial Proprietary Product.</p>
+        <p>Built with Pure Go 1.26.6, PostgreSQL 16 &amp; Redis 7.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div class="toast-popup" id="toast">Copied to clipboard</div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toast = document.getElementById('toast');
+      function showToast(msg = 'Copied to clipboard') {
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(() => showToast());
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showToast();
+        }
+      }
+
+      const btnCopyConfig = document.getElementById('btn-copy-config');
+      const claudeConfigText = `{\n  "mcpServers": {\n    "social-publisher": {\n      "command": "docker",\n      "args": ["exec", "-i", "social_mcp_app", "/app/social-mcp-server"]\n    }\n  }\n}`;
+      if (btnCopyConfig) {
+        btnCopyConfig.addEventListener('click', () => copyText(claudeConfigText));
+      }
+
+      const chatThread = document.getElementById('chat-thread');
+      const actionChips = document.querySelectorAll('.action-chip');
+
+      const demoScenarios = {
+        combo: {
+          userQuery: 'Upload our 120MB video to YouTube with title "Autonomous Go Architecture", and cross-post a teaser tweet to Twitter with our image banner.',
+          aiResponse: `
+            <p class="ai-intro">Executing simultaneous multi-platform publishing:</p>
+            <div class="step-card">
+              <div class="step-header">
+                <span class="platform-tag yt"><i class="fa-brands fa-youtube"></i> YouTube (Data API v3)</span>
+                <span class="step-speed">8MB Resumable Chunks</span>
+              </div>
+              <div class="progress-line">
+                <div class="progress-bar-fill" style="width: 100%;"></div>
+              </div>
+              <div class="step-result text-success">
+                <i class="fa-solid fa-circle-check"></i> Uploaded Video ID: <strong>yt_v90281a</strong> • Quota Reserved: 1,600 / 10,000
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="platform-tag x"><i class="fa-brands fa-x-twitter"></i> Twitter / X (API v2)</span>
+                <span class="step-speed">14ms Direct Dispatch</span>
+              </div>
+              <div class="step-result text-success">
+                <i class="fa-solid fa-circle-check"></i> Published Tweet ID: <strong>1894726190283741184</strong> • Idempotency Lock: ACQUIRED
+              </div>
+            </div>
+          `
+        },
+        instagram: {
+          userQuery: 'Post this photo to my Instagram Feed with caption "Behind the scenes at our summit! 📸✨" from https://cdn.example.com/photo.png',
+          aiResponse: `
+            <p class="ai-intro">Processing container lifecycle via Meta Graph API v20.0:</p>
+            <div class="step-card">
+              <div class="step-header">
+                <span class="platform-tag ig"><i class="fa-brands fa-instagram"></i> Instagram (Meta Graph API)</span>
+                <span class="step-speed">PNG-to-JPEG Auto-Transcode</span>
+              </div>
+              <div class="step-result text-success">
+                <i class="fa-solid fa-circle-check"></i> Container Created: <strong>179948291048</strong> • Published Instagram Media ID: <strong>1789502948201</strong>
+              </div>
+            </div>
+          `
+        },
+        analytics: {
+          userQuery: 'Query real-time engagement telemetry for our published Instagram post ID 1789502948201.',
+          aiResponse: `
+            <p class="ai-intro">Aggregating live metric telemetry from upstream social APIs:</p>
+            <div class="step-card">
+              <div class="step-header">
+                <span class="platform-tag ig"><i class="fa-brands fa-instagram"></i> Instagram Telemetry</span>
+                <span class="step-speed">Live Sync</span>
+              </div>
+              <div class="step-result text-success">
+                <i class="fa-solid fa-circle-check"></i> Impressions: <strong>14,250</strong> • Reach: <strong>11,890</strong> • Likes: <strong>842</strong> • Comments: <strong>67</strong> • Shares: <strong>128</strong>
+              </div>
+            </div>
+          `
+        }
+      };
+
+      actionChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+          actionChips.forEach((c) => c.classList.remove('active'));
+          chip.classList.add('active');
+
+          const actionKey = chip.getAttribute('data-action');
+          const data = demoScenarios[actionKey];
+          if (!data) return;
+
+          chatThread.innerHTML = `
+            <div class="chat-row user-side">
+              <div class="chat-label">You</div>
+              <div class="chat-card user-bubble">
+                ${data.userQuery}
+              </div>
+            </div>
+
+            <div class="chat-row ai-side">
+              <div class="chat-label">Claude (via Social MCP)</div>
+              <div class="chat-card ai-bubble">
+                ${data.aiResponse}
+              </div>
+            </div>
+          `;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -31,6 +31,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/telemetry"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/web"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -178,7 +179,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mux := http.NewServeMux()
 
-	// Healthcheck (Public & Minimal Safe Payload)
+	// Public Landing Page & Healthcheck
+	mux.HandleFunc("/", s.handleRoot)
 	mux.HandleFunc("/health", s.handleHealth)
 
 	// Prometheus Metrics Endpoint (Protected with Bearer Token Authentication)
@@ -684,6 +686,16 @@ func (s *HTTPServer) Start() error {
 // Shutdown gracefully stops the server.
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
+}
+
+func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(web.IndexHTML)
 }
 
 func (s *HTTPServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
