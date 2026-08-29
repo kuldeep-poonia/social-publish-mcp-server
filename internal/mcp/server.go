@@ -247,6 +247,93 @@ func (s *Server) RegisterInsightsAndOptimizationTools(accountInsightsHandler, op
 	}, optimizeContentHandler)
 }
 
+// RegisterSchedulerTools registers MCP tool schemas for schedule_post, list_scheduled_posts, and cancel_scheduled_post.
+func (s *Server) RegisterSchedulerTools(scheduleHandler, listScheduledHandler, cancelScheduledHandler ToolHandler) {
+	scheduleSchema := `{
+		"type": "object",
+		"properties": {
+			"platform": {
+				"type": "string",
+				"enum": ["twitter", "youtube", "instagram"],
+				"description": "Target social media platform"
+			},
+			"scheduled_time": {
+				"type": "string",
+				"description": "ISO 8601 timestamp (e.g. 2026-08-30T18:00:00Z) for when the post should be published"
+			},
+			"content": {
+				"type": "string",
+				"description": "Text caption, tweet content, or video title/description"
+			},
+			"image_prompt": {
+				"type": "string",
+				"description": "Optional prompt to auto-generate a stunning visual creative with AI at scheduled publication time"
+			},
+			"media_urls": {
+				"type": "array",
+				"items": {"type": "string"},
+				"description": "Optional public HTTPS URLs of video or image media to publish"
+			},
+			"media_path": {
+				"type": "string",
+				"description": "Optional local file path to video (e.g. reel.mp4, video.mov) or image"
+			},
+			"media_type": {
+				"type": "string",
+				"enum": ["IMAGE", "VIDEO", "REELS", "SHORTS"],
+				"description": "Media type (e.g. REELS for Instagram Reels, VIDEO for YouTube / Twitter)"
+			},
+			"idempotency_key": {
+				"type": "string",
+				"description": "Optional unique idempotency key to prevent duplicate scheduling"
+			}
+		},
+		"required": ["platform", "scheduled_time"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "schedule_post",
+		Description: "Schedule an autonomous social media post, Instagram Reel, YouTube Video/Short, or Tweet for future publication with AI copy generation support",
+		InputSchema: json.RawMessage(scheduleSchema),
+	}, scheduleHandler)
+
+	listSchema := `{
+		"type": "object",
+		"properties": {
+			"limit": {
+				"type": "integer",
+				"description": "Maximum number of scheduled posts to return (default: 20)"
+			}
+		},
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "list_scheduled_posts",
+		Description: "List all pending upcoming scheduled posts across Instagram, Twitter, and YouTube",
+		InputSchema: json.RawMessage(listSchema),
+	}, listScheduledHandler)
+
+	cancelSchema := `{
+		"type": "object",
+		"properties": {
+			"post_id": {
+				"type": "string",
+				"description": "UUID ID of the scheduled post to cancel"
+			}
+		},
+		"required": ["post_id"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "cancel_scheduled_post",
+		Description: "Cancel and remove a pending scheduled social media post before it gets published",
+		InputSchema: json.RawMessage(cancelSchema),
+	}, cancelScheduledHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()

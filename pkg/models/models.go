@@ -104,18 +104,22 @@ type PlatformConnection struct {
 
 // Post represents a social media post across supported platforms.
 type Post struct {
-	ID             string      `json:"id"`
-	UserID         string      `json:"user_id"`
-	Platform       string      `json:"platform"`
-	PlatformPostID string      `json:"platform_post_id,omitempty"`
-	Content        string      `json:"content"`
-	MediaURLs      StringArray `json:"media_urls,omitempty"`
-	Status         string      `json:"status"`
-	ScheduledAt    *time.Time  `json:"scheduled_at,omitempty"`
-	PublishedAt    *time.Time  `json:"published_at,omitempty"`
-	IdempotencyKey string      `json:"idempotency_key"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	ID             string          `json:"id"`
+	UserID         string          `json:"user_id"`
+	Platform       string          `json:"platform"`
+	PlatformPostID string          `json:"platform_post_id,omitempty"`
+	Content        string          `json:"content"`
+	MediaURLs      StringArray     `json:"media_urls,omitempty"`
+	MediaPath      string          `json:"media_path,omitempty"`
+	MediaType      string          `json:"media_type,omitempty"`
+	ImagePrompt    string          `json:"image_prompt,omitempty"`
+	Status         string          `json:"status"`
+	ScheduledAt    *time.Time      `json:"scheduled_at,omitempty"`
+	PublishedAt    *time.Time      `json:"published_at,omitempty"`
+	IdempotencyKey string          `json:"idempotency_key"`
+	Metadata       json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // AnalyticsSnapshot represents a point-in-time metrics capture for a published post.

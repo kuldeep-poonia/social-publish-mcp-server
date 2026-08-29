@@ -239,8 +239,8 @@ func (s *OAuthServer) ExchangeCodeForTokens(ctx context.Context, req *TokenExcha
 	}
 
 	// Validate PKCE S256 verifier (if challenge was provided)
-	if record.CodeChallenge != "" && req.CodeVerifier != "" {
-		if !ValidatePKCES256(req.CodeVerifier, record.CodeChallenge) {
+	if record.CodeChallenge != "" {
+		if req.CodeVerifier == "" || !ValidatePKCES256(req.CodeVerifier, record.CodeChallenge) {
 			s.mu.Unlock()
 			log.Printf("[OAuth Core: TokenExchange] ERROR: PKCE verifier validation failed against challenge")
 			return nil, ErrInvalidCodeVerifier

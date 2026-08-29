@@ -161,9 +161,13 @@ func TestSecurity_AuthBypassAndTokenTampering(t *testing.T) {
 		recordProbe("PKCE Tampered Code Verifier", errA != nil, errA)
 
 		// Probe B: Empty Verifier
+		codeB, errBAuth := oauthServer.Authorize(authReq)
+		if errBAuth != nil {
+			t.Fatalf("failed generating auth code for probe B: %v", errBAuth)
+		}
 		_, errB := oauthServer.ExchangeCodeForTokens(context.Background(), &auth.TokenExchangeRequest{
 			GrantType:    "authorization_code",
-			Code:         code,
+			Code:         codeB,
 			ClientID:     "test_client",
 			RedirectURI:  "http://localhost:8080/callback",
 			CodeVerifier: "",

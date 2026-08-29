@@ -20,6 +20,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 )
 
@@ -771,8 +772,169 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
+	scheduleHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to schedule posts")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		if s.schedulerService == nil {
+			return nil, errors.New("scheduler service is not initialized")
+		}
+
+		platform, _ := args["platform"].(string)
+		content, _ := args["content"].(string)
+		scheduledTimeStr, _ := args["scheduled_time"].(string)
+		imagePrompt, _ := args["image_prompt"].(string)
+		mediaPath, _ := args["media_path"].(string)
+		mediaType, _ := args["media_type"].(string)
+		idempotencyKey, _ := args["idempotency_key"].(string)
+
+		var mediaURLs []string
+		if rawURLs, ok := args["media_urls"].([]interface{}); ok {
+			for _, u := range rawURLs {
+				if str, ok := u.(string); ok && strings.TrimSpace(str) != "" {
+					mediaURLs = append(mediaURLs, str)
+				}
+			}
+		}
+
+		scheduledAt, parseErr := time.Parse(time.RFC3339, scheduledTimeStr)
+		if parseErr != nil {
+			if parsed, err := time.Parse("2006-01-02T15:04:05", scheduledTimeStr); err == nil {
+				scheduledAt = parsed.UTC()
+			} else {
+				return nil, fmt.Errorf("invalid scheduled_time format '%s' (expected ISO 8601 e.g. 2026-08-30T18:00:00Z): %w", scheduledTimeStr, parseErr)
+			}
+		}
+
+		post, err := s.schedulerService.SchedulePost(ctx, &scheduler.SchedulePostRequest{
+			UserID:         actualUserID,
+			Platform:       platform,
+			Content:        content,
+			ScheduledAt:    scheduledAt,
+			MediaURLs:      mediaURLs,
+			MediaPath:      mediaPath,
+			MediaType:      mediaType,
+			ImagePrompt:    imagePrompt,
+			IdempotencyKey: idempotencyKey,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		resultJSON, _ := json.Marshal(map[string]interface{}{
+			"status":         "scheduled",
+			"post_id":        post.ID,
+			"platform":       post.Platform,
+			"scheduled_time": post.ScheduledAt.Format(time.RFC3339),
+			"content":        post.Content,
+			"image_prompt":   post.ImagePrompt,
+			"media_type":     post.MediaType,
+			"message":        fmt.Sprintf("Post successfully scheduled for %s at %s UTC", post.Platform, post.ScheduledAt.Format(time.RFC3339)),
+		})
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	listScheduledHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to list scheduled posts")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		if s.schedulerService == nil {
+			return nil, errors.New("scheduler service is not initialized")
+		}
+
+		limit := 20
+		if rawLimit, ok := args["limit"].(float64); ok && rawLimit > 0 {
+			limit = int(rawLimit)
+		}
+
+		posts, err := s.schedulerService.ListScheduledPosts(ctx, actualUserID, limit)
+		if err != nil {
+			return nil, err
+		}
+
+		resultJSON, _ := json.Marshal(map[string]interface{}{
+			"count": len(posts),
+			"posts": posts,
+		})
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	cancelScheduledHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to cancel scheduled posts")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		if s.schedulerService == nil {
+			return nil, errors.New("scheduler service is not initialized")
+		}
+
+		postID, _ := args["post_id"].(string)
+		if postID == "" {
+			return nil, errors.New("post_id is required")
+		}
+
+		if err := s.schedulerService.CancelScheduledPost(ctx, actualUserID, postID); err != nil {
+			return nil, err
+		}
+
+		resultJSON, _ := json.Marshal(map[string]interface{}{
+			"status":  "cancelled",
+			"post_id": postID,
+			"message": "Scheduled post has been successfully cancelled",
+		})
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(resultJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler)
 	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
+	s.mcpServer.RegisterSchedulerTools(scheduleHandler, listScheduledHandler, cancelScheduledHandler)
 }
 
 func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queue.PublishJob) error {

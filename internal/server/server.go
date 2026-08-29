@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/telemetry"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/web"
 	"github.com/redis/go-redis/v9"
@@ -44,6 +46,7 @@ type HTTPServer struct {
 	instagramService    *instagram.Service
 	instagramClient     *instagram.Client
 	mediaStager         *instagram.MediaStager
+	schedulerService    *scheduler.Service
 	redisClient         *redis.Client
 	streamQueue         *queue.RedisStreamQueue
 	workerPool          *queue.WorkerPool
@@ -133,6 +136,12 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		instagramService = instagram.NewService(db, repo, instagramClient, mediaStager)
 	}
 
+	var schedulerService *scheduler.Service
+	if db != nil && repo != nil {
+		schedulerService = scheduler.NewService(db, instagramService, twitterService, youtubeService, mediaStager, repo)
+		schedulerService.StartWorker(context.Background(), 30*time.Second)
+	}
+
 	s := &HTTPServer{
 		oauthServer:         oauthServer,
 		mcpServer:           mcpServer,
@@ -148,6 +157,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		instagramService:    instagramService,
 		instagramClient:     instagramClient,
 		mediaStager:         mediaStager,
+		schedulerService:    schedulerService,
 		redisClient:         rdb,
 		streamQueue:         streamQueue,
 		dlqManager:          dlqManager,
@@ -235,6 +245,11 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/api/v1/optimize", s.authMiddleware(s.handleRESTOptimize))
 	mux.HandleFunc("/api/v1/connect", s.handleRESTConnect)
 
+	// Scheduling & Cron Triggers
+	mux.HandleFunc("/api/v1/schedule", s.authMiddleware(s.handleRESTSchedule))
+	mux.HandleFunc("/api/v1/schedule/", s.authMiddleware(s.handleRESTScheduleByID))
+	mux.HandleFunc("/api/v1/cron/execute-scheduled", s.handleCronExecuteScheduled)
+
 	// Wrap root with Telemetry, CORS, and Rate Limiting
 	handler := s.telemetryMiddleware(s.rateLimitMiddleware(s.corsMiddleware(mux)))
 
@@ -257,6 +272,9 @@ func (s *HTTPServer) Start() error {
 
 // Shutdown gracefully stops the server.
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
+	if s.schedulerService != nil {
+		s.schedulerService.StopWorker()
+	}
 	return s.server.Shutdown(ctx)
 }
 
@@ -457,9 +475,9 @@ func extractClientIP(r *http.Request) string {
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return strings.TrimSpace(xri)
 	}
-	parts := strings.Split(r.RemoteAddr, ":")
-	if len(parts) > 0 {
-		return parts[0]
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
 	}
 	return "127.0.0.1"
 }

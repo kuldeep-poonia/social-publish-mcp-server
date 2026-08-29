@@ -174,7 +174,9 @@ func TestServer_RateLimitingMiddleware_429Enforcement(t *testing.T) {
 	var rateLimitedCount int
 
 	for i := 0; i < burst+extra; i++ {
-		resp, err := http.Get(ts.URL + "/health")
+		req, _ := http.NewRequest(http.MethodGet, ts.URL+"/health", nil)
+		req.Header.Set("X-Forwarded-For", "198.51.100.1")
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("request %d failed: %v", i, err)
 		}

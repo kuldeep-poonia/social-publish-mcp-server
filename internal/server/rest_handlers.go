@@ -199,6 +199,61 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 					},
 				},
 			},
+			"/api/v1/schedule": map[string]interface{}{
+				"post": map[string]interface{}{
+					"operationId": "schedulePost",
+					"summary":     "Schedule post for future publication",
+					"description": "Schedules a social media post, Reel, Video, or Tweet for autonomous future publication.",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"platform": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"instagram", "youtube", "twitter"},
+										},
+										"scheduled_time": map[string]interface{}{
+											"type":        "string",
+											"description": "ISO 8601 timestamp (e.g. 2026-08-30T18:00:00Z)",
+										},
+										"content": map[string]interface{}{
+											"type": "string",
+										},
+										"image_prompt": map[string]interface{}{
+											"type": "string",
+										},
+										"media_urls": map[string]interface{}{
+											"type":  "array",
+											"items": map[string]string{"type": "string"},
+										},
+										"media_path": map[string]interface{}{
+											"type": "string",
+										},
+										"media_type": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"IMAGE", "VIDEO", "REELS", "SHORTS"},
+										},
+									},
+									"required": []string{"platform", "scheduled_time"},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Post scheduled successfully"},
+					},
+				},
+				"get": map[string]interface{}{
+					"operationId": "listScheduledPosts",
+					"summary":     "List upcoming scheduled posts",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "List of scheduled posts"},
+					},
+				},
+			},
 			"/api/v1/connect": map[string]interface{}{
 				"get": map[string]interface{}{
 					"operationId": "connectPlatform",
@@ -492,5 +547,135 @@ func (s *HTTPServer) handleRESTConnect(w http.ResponseWriter, r *http.Request) {
 		"connect_url": connectURL,
 		"status":      "action_required",
 		"instruction": "Open connect_url in your web browser to authenticate and link account",
+	})
+}
+
+func (s *HTTPServer) handleRESTSchedule(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodPost {
+		var reqBody map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+		paramsJSON, _ := json.Marshal(map[string]interface{}{
+			"name":      "schedule_post",
+			"arguments": reqBody,
+		})
+		callReq.Params = paramsJSON
+
+		reqBytes, _ := json.Marshal(callReq)
+		resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+		if resp != nil && resp.Error != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp.Error)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp.Result)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		limit := 20
+		args := map[string]interface{}{"limit": limit}
+
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+		paramsJSON, _ := json.Marshal(map[string]interface{}{
+			"name":      "list_scheduled_posts",
+			"arguments": args,
+		})
+		callReq.Params = paramsJSON
+
+		reqBytes, _ := json.Marshal(callReq)
+		resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+		if resp != nil && resp.Error != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp.Error)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp.Result)
+		return
+	}
+
+	http.Error(w, "Method Not Allowed, use POST or GET", http.StatusMethodNotAllowed)
+}
+
+func (s *HTTPServer) handleRESTScheduleByID(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method Not Allowed, use DELETE", http.StatusMethodNotAllowed)
+		return
+	}
+
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 4 || pathParts[3] == "" {
+		http.Error(w, "Missing post ID in path (/api/v1/schedule/{id})", http.StatusBadRequest)
+		return
+	}
+	postID := pathParts[3]
+
+	callReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+	}
+	paramsJSON, _ := json.Marshal(map[string]interface{}{
+		"name": "cancel_scheduled_post",
+		"arguments": map[string]interface{}{
+			"post_id": postID,
+		},
+	})
+	callReq.Params = paramsJSON
+
+	reqBytes, _ := json.Marshal(callReq)
+	resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+	if resp != nil && resp.Error != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(resp.Error)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp.Result)
+}
+
+func (s *HTTPServer) handleCronExecuteScheduled(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if s.schedulerService == nil {
+		http.Error(w, "Scheduler service is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	report, err := s.schedulerService.ExecuteDuePosts(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "success",
+		"report": report,
 	})
 }
