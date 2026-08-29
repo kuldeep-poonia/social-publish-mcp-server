@@ -345,7 +345,11 @@ func (s *HTTPServer) handleTwitterCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	if s.repo != nil {
-		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		expSeconds := tokenResp.ExpiresIn
+		if expSeconds <= 0 {
+			expSeconds = 7200 // 2 hours default
+		}
+		expiresAt := time.Now().UTC().Add(time.Duration(expSeconds) * time.Second)
 		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "twitter", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, twitter.RequiredScopes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
@@ -476,7 +480,11 @@ func (s *HTTPServer) handleYouTubeCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	if s.repo != nil {
-		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		expSeconds := tokenResp.ExpiresIn
+		if expSeconds <= 0 {
+			expSeconds = 3600 // 1 hour default
+		}
+		expiresAt := time.Now().UTC().Add(time.Duration(expSeconds) * time.Second)
 		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "youtube", []byte(tokenResp.AccessToken), []byte(tokenResp.RefreshToken), expiresAt, youtube.RequiredScopes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)
@@ -606,7 +614,11 @@ func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Requ
 	}
 
 	if s.repo != nil {
-		expiresAt := time.Now().UTC().Add(time.Duration(longLivedTok.ExpiresIn) * time.Second)
+		expSecs := longLivedTok.ExpiresIn
+		if expSecs <= 0 {
+			expSecs = 60 * 24 * 3600 // 60 days
+		}
+		expiresAt := time.Now().UTC().Add(time.Duration(expSecs) * time.Second)
 		err = s.repo.SavePlatformConnection(r.Context(), actualUserID, "instagram", []byte(longLivedTok.AccessToken), nil, expiresAt, instagram.RequiredScopes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed saving encrypted credentials to vault: %v", err), http.StatusInternalServerError)

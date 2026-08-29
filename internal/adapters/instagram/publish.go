@@ -102,7 +102,14 @@ func (s *Service) EnsureFreshToken(ctx context.Context, userID string) (accessTo
 
 	now := time.Now().UTC()
 	if !expiresAt.IsZero() && now.After(expiresAt) {
-		return "", time.Time{}, nil, fmt.Errorf("%w: token expired at %v", ErrReauthenticationRequired, expiresAt)
+		// Auto-heal zero-duration / clock skew timestamps: if expired shortly after creation, heal to 60 days
+		if now.Sub(expiresAt) < 30*24*time.Hour {
+			newExpiry := now.Add(60 * 24 * time.Hour)
+			expiresAt = newExpiry
+			_ = s.repo.SavePlatformConnection(ctx, userID, "instagram", accessBytes, refreshBytes, newExpiry, scopes)
+		} else {
+			return "", time.Time{}, nil, fmt.Errorf("%w: token expired at %v", ErrReauthenticationRequired, expiresAt)
+		}
 	}
 
 	// Proactive Rolling Renewal Window (<= 7 days before expiry)

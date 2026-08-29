@@ -70,6 +70,9 @@ func (c *Client) ExchangeShortLivedToken(ctx context.Context, code, redirectURI 
 	if err := json.Unmarshal(body, &tok); err != nil {
 		return nil, fmt.Errorf("failed decoding token response: %w", err)
 	}
+	if tok.ExpiresIn <= 0 {
+		tok.ExpiresIn = 3600 // 1 hour default
+	}
 	return &tok, nil
 }
 
@@ -97,6 +100,9 @@ func (c *Client) ExchangeLongLivedToken(ctx context.Context, shortLivedToken str
 	var tok TokenResponse
 	if err := json.Unmarshal(body, &tok); err != nil {
 		return nil, fmt.Errorf("failed decoding long-lived token response: %w", err)
+	}
+	if tok.ExpiresIn <= 0 {
+		tok.ExpiresIn = 60 * 24 * 3600 // 60 days default (5,184,000 seconds)
 	}
 	return &tok, nil
 }
