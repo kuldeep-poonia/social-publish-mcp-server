@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,38 @@ func TestOptimizer_CTRVariationsAndSanitization(t *testing.T) {
 
 	if report.PredictedImpact == "" {
 		t.Errorf("expected predicted impact explanation")
+	}
+
+	// Verify UUID is never leaked into title
+	if strings.Contains(report.OptimizedTitle, "yt_test_123") {
+		t.Errorf("ID leaked into optimized title: %s", report.OptimizedTitle)
+	}
+}
+
+func TestOptimizer_NoUUIDInTitleWhenExtractingFromDBOrEmpty(t *testing.T) {
+	svc := NewService(nil, nil, nil, "", nil)
+
+	testUUID := "34c9624f-22f5-4ffe-a12e-943687c577b2"
+	report, err := svc.UpdatePostMetadata(context.Background(), &UpdateMetadataRequest{
+		PostID:         testUUID,
+		Platform:       "instagram",
+		Objective:      "viral_rehook",
+		Niche:          "fitness",
+		AutoOptimizeAI: true,
+		ApplyLive:      false,
+	})
+	if err != nil {
+		t.Fatalf("failed: %v", err)
+	}
+
+	if strings.Contains(report.OptimizedTitle, testUUID) {
+		t.Fatalf("CRITICAL BUG: Raw database UUID leaked into title! Got: %s", report.OptimizedTitle)
+	}
+
+	for _, v := range report.TitleCTRVariations {
+		if strings.Contains(v, testUUID) {
+			t.Fatalf("CRITICAL BUG: Raw database UUID leaked into variation! Got: %s", v)
+		}
 	}
 }
 

@@ -204,8 +204,23 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 	if baseTitle == "" {
 		baseTitle = prevTitle
 	}
-	if baseTitle == "" {
-		baseTitle = req.PostID
+	if baseTitle == "" || s.isIDLike(baseTitle) {
+		// If baseTitle is missing or looks like an ID/UUID, extract topic from prevDesc if available
+		if prevDesc != "" {
+			firstLine := strings.TrimSpace(strings.Split(prevDesc, "\n")[0])
+			firstLine = strings.TrimLeft(firstLine, "✨🔥🚀📌•-—*# ")
+			if len(firstLine) > 5 && !s.isIDLike(firstLine) {
+				baseTitle = firstLine
+			}
+		}
+	}
+	if baseTitle == "" || s.isIDLike(baseTitle) {
+		if req.Niche != "" {
+			cleanNiche := strings.ReplaceAll(req.Niche, "_", " ")
+			baseTitle = capitalizeWords(cleanNiche) + " Optimization"
+		} else {
+			baseTitle = "Creator Content Strategy"
+		}
 	}
 
 	baseDesc := req.CustomDescription
@@ -221,17 +236,17 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 		}
 	}
 
-	// Dynamic CTR Formula Synthesis
+	// Dynamic CTR Formula Synthesis with clean subject extraction
 	cleanSubject := cleanEntityTitle(baseTitle)
-	if cleanSubject == "" {
-		cleanSubject = "This Breakthrough"
+	if cleanSubject == "" || s.isIDLike(cleanSubject) {
+		cleanSubject = "Modern Workflow"
 	}
 
-	// 3 CTR High-Converting Angles
+	// 3 Distinct High-Converting Angles (Natural phrasing, zero double-year repetition)
 	variations := []string{
-		fmt.Sprintf("Why %s Changes Everything in 2026 (Full Breakdown)", cleanSubject),
-		fmt.Sprintf("The Real Truth About %s Nobody Is Talking About", cleanSubject),
-		fmt.Sprintf("I Tested %s for 30 Days — Here Is What Happened", cleanSubject),
+		fmt.Sprintf("Why %s is the Future of Tech (Complete Breakdown)", cleanSubject),
+		fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
+		fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
 	}
 
 	primaryTitle := variations[0]
@@ -244,33 +259,41 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 	seenTags := make(map[string]bool)
 	for _, t := range req.CustomTags {
 		san := scout.SanitizeHashtag(t)
-		if san != "" && !seenTags[strings.ToLower(san)] {
-			tags = append(tags, strings.TrimPrefix(san, "#"))
-			seenTags[strings.ToLower(san)] = true
+		clean := strings.TrimPrefix(san, "#")
+		if clean != "" && !seenTags[strings.ToLower(clean)] && !s.isIDLike(clean) {
+			tags = append(tags, clean)
+			seenTags[strings.ToLower(clean)] = true
 		}
 	}
 	if len(tags) == 0 {
-		defaultTags := []string{
-			cleanSubject, "Technology", "Innovation", "Tutorial", "Review2026",
-			"FutureTech", "Productivity", "DeepDive",
-		}
-		if req.Niche != "" {
-			defaultTags = append([]string{scout.SanitizeHashtag(req.Niche)}, defaultTags...)
-		}
-		for _, t := range defaultTags {
-			san := scout.SanitizeHashtag(t)
+		tagWords := strings.Fields(cleanSubject)
+		for _, w := range tagWords {
+			san := scout.SanitizeHashtag(w)
 			clean := strings.TrimPrefix(san, "#")
-			if clean != "" && !seenTags[strings.ToLower(clean)] {
+			if len(clean) > 2 && !seenTags[strings.ToLower(clean)] && !s.isIDLike(clean) {
 				tags = append(tags, clean)
 				seenTags[strings.ToLower(clean)] = true
+			}
+		}
+		if req.Niche != "" {
+			sanNiche := strings.TrimPrefix(scout.SanitizeHashtag(req.Niche), "#")
+			if !seenTags[strings.ToLower(sanNiche)] {
+				tags = append([]string{sanNiche}, tags...)
+				seenTags[strings.ToLower(sanNiche)] = true
+			}
+		}
+		for _, t := range []string{"Technology", "Innovation", "Tutorial", "Productivity", "DeepDive"} {
+			if !seenTags[strings.ToLower(t)] {
+				tags = append(tags, t)
+				seenTags[strings.ToLower(t)] = true
 			}
 		}
 	}
 
 	tagLine := "#" + strings.Join(tags[:min(5, len(tags))], " #")
-	optimizedDesc := fmt.Sprintf(`🚀 Everything you need to know about %s.
+	optimizedDesc := fmt.Sprintf(`🚀 Complete deep dive: %s.
 
-🔥 Core Hook: We break down the exact mechanics, benchmarks, and real-world implications so you can stay ahead.
+🔥 Core Hook: We break down the exact mechanics, benchmarks, and real-world takeaways so you can stay ahead.
 
 ⏱️ Timestamps:
 0:00 - The Big Picture & Context
@@ -278,7 +301,7 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 3:45 - Key Takeaways & Pro Tips
 5:30 - Future Outlook
 
-💬 Drop your questions in the comments below — we reply to every comment!
+💬 Drop your thoughts and questions in the comments below!
 🔔 Subscribe for weekly high-signal %s breakdowns.
 
 %s`, cleanSubject, req.Niche, tagLine)
@@ -292,13 +315,13 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 		TitleVariations: variations,
 		Description:     optimizedDesc,
 		Tags:            tags,
-		PredictedImpact: "+28% to +45% Click-Through Rate (CTR) improvement via curiosity gap rehooking and high-volume search discovery keywords",
+		PredictedImpact: "Optimization Strategy: Curiosity-gap title rehooking & high-intent search discovery keywords (Unverified estimate, not measured)",
 	}
 }
 
 func (s *Service) callGeminiOptimization(ctx context.Context, req *UpdateMetadataRequest, title, desc string) (*aiOptimizationOutput, error) {
 	prompt := fmt.Sprintf(`You are a world-class YouTube & Social Media CTR Optimization specialist.
-Optimize this post metadata for maximum Click-Through Rate (CTR), search discovery, and audience retention:
+Optimize this post metadata for maximum Click-Through Rate (CTR), search discovery, and audience retention.
 
 Current Title: %s
 Current Description: %s
@@ -307,17 +330,17 @@ Objective: %s
 Niche: %s
 Target Audience: %s
 
-Respond with raw JSON matching this exact structure:
+Respond with raw JSON matching this exact structure (do NOT use markdown fences or code blocks):
 {
-  "primary_title": "Best high-CTR title under 90 chars using curiosity gap or value hook",
+  "primary_title": "Best high-CTR title under 90 chars using curiosity gap or value hook (fresh rewrite, no repetitive templates)",
   "title_variations": [
     "Angle 1: Curiosity / Open Loop title",
-    "Angle 2: Contrarian / Urgency title",
+    "Angle 2: Contrarian / Critical perspective title",
     "Angle 3: Step-by-step Value / Case study title"
   ],
   "description": "Structured high-retention description with timestamps, key takeaway bullets, and calls to action",
-  "tags": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "predicted_impact": "Estimated percentage CTR and watch-time lift explanation"
+  "tags": ["Keyword1", "Keyword2", "Keyword3", "Keyword4", "Keyword5"],
+  "predicted_impact": "Optimization Strategy: Qualitative rationale for the changes without inventing fake percentage statistics"
 }`, title, desc, req.Platform, req.Objective, req.Niche, req.TargetAudience)
 
 	reqPayload := map[string]interface{}{
@@ -389,15 +412,62 @@ Respond with raw JSON matching this exact structure:
 }
 
 func cleanEntityTitle(t string) string {
-	t = regexp.MustCompile(`(?i)\b(why|how|what|is|now|official|released|the|a|an)\b`).ReplaceAllString(t, "")
-	t = regexp.MustCompile(`[^a-zA-Z0-9\s-]`).ReplaceAllString(t, "")
-	t = strings.Join(strings.Fields(t), " ")
-	return strings.TrimSpace(t)
+	// Strip year markers to prevent double year repetition
+	t = regexp.MustCompile(`(?i)\b(202[0-9]|2030)\b`).ReplaceAllString(t, " ")
+	t = regexp.MustCompile(`(?i)\b(why|how|what|is|now|official|released|the|a|an|in|for|are|taking|over|tested|days|changes|everything)\b`).ReplaceAllString(t, " ")
+	t = regexp.MustCompile(`[^a-zA-Z0-9\s-]`).ReplaceAllString(t, " ")
+	words := strings.Fields(t)
+	var filtered []string
+	for _, w := range words {
+		if len(w) >= 3 && !isHexOrHash(w) {
+			filtered = append(filtered, capitalizeWord(w))
+		}
+	}
+	if len(filtered) == 0 {
+		return "Modern Tech Workflow"
+	}
+	return strings.Join(filtered[:min(4, len(filtered))], " ")
 }
 
 func (s *Service) isUUID(u string) bool {
 	_, err := uuid.Parse(u)
 	return err == nil
+}
+
+func (s *Service) isIDLike(str string) bool {
+	str = strings.TrimSpace(str)
+	if _, err := uuid.Parse(str); err == nil {
+		return true
+	}
+	if matched, _ := regexp.MatchString(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, str); matched {
+		return true
+	}
+	if matched, _ := regexp.MatchString(`(?i)^(yt_|tw_|ig_)?[0-9a-f_-]{16,}$`, str); matched {
+		return true
+	}
+	return false
+}
+
+func isHexOrHash(s string) bool {
+	if len(s) >= 8 && regexp.MustCompile(`^[0-9a-fA-F-]+$`).MatchString(s) {
+		return true
+	}
+	return false
+}
+
+func capitalizeWord(w string) string {
+	if len(w) == 0 {
+		return ""
+	}
+	return strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+}
+
+func capitalizeWords(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		words[i] = capitalizeWord(w)
+	}
+	return strings.Join(words, " ")
 }
 
 func min(a, b int) int {
@@ -406,3 +476,4 @@ func min(a, b int) int {
 	}
 	return b
 }
+
