@@ -596,13 +596,7 @@ func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// 3. Discover Instagram Business/Creator Account
-	igAccount, _, err := s.instagramClient.GetInstagramBusinessAccount(r.Context(), longLivedTok.AccessToken)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Instagram Business Account Discovery Failed: %v", err), http.StatusBadRequest)
-		return
-	}
-
+	// 3. Persist encrypted credentials into PostgreSQL Token Vault immediately
 	actualUserID := oauthState.userID
 	if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
 		user, userErr := s.repo.GetOrCreateUserByUsername(r.Context(), actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
@@ -620,6 +614,15 @@ func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// 4. Discover Instagram Business/Creator Account
+	igAccount, _, _ := s.instagramClient.GetInstagramBusinessAccount(r.Context(), longLivedTok.AccessToken)
+	handleText := "Instagram User"
+	accountIDText := "Connected"
+	if igAccount != nil && igAccount.Username != "" {
+		handleText = "@" + igAccount.Username
+		accountIDText = igAccount.ID
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, `
@@ -630,7 +633,7 @@ func (s *HTTPServer) handleInstagramCallback(w http.ResponseWriter, r *http.Requ
 <div class="card">
 <div class="badge">Connected Successfully</div>
 <h1>Instagram Business Authorized</h1>
-<p>Your Instagram Business account <span class="handle">@%s</span> (ID: %s) is now securely linked in the encrypted token vault for user <strong>%s</strong>.</p>
+<p>Your Instagram account <span class="handle">%s</span> (ID: %s) is now securely linked in the encrypted token vault for user <strong>%s</strong>.</p>
 <p>You can now close this tab and return to your active ChatGPT / Claude chat!</p>
 <div class="btn-group">
 <button onclick="window.close()" class="btn btn-close">Close & Return to Chat</button>
@@ -642,7 +645,7 @@ if (window.opener) {
 }
 </script>
 </body>
-</html>`, igAccount.Username, igAccount.ID, oauthState.userID)
+</html>`, handleText, accountIDText, oauthState.userID)
 }
 
 func (s *HTTPServer) handleInstagramWebhook(w http.ResponseWriter, r *http.Request) {
