@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -281,6 +282,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				mediaData = decoded
 			}
 
+			log.Printf("[MCP publish_post:instagram] Calling Publish for actualUserID=%s, caption=%s, imagePrompt=%s, mediaURLs=%v", actualUserID, caption, imagePrompt, mediaURLs)
 			resp, err := s.instagramService.Publish(ctx, &instagram.PublishPostRequest{
 				UserID:         actualUserID,
 				Caption:        caption,
@@ -292,6 +294,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
+				log.Printf("[MCP publish_post:instagram] Publish ERROR for actualUserID=%s: %v (isAuthOrExpired=%v)", actualUserID, err, s.isAuthOrExpiredError(err))
 				if s.isAuthOrExpiredError(err) {
 					return s.makeAuthRequiredToolResult("instagram", actualUserID, err), nil
 				}

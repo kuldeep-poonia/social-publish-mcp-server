@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -290,6 +291,9 @@ func (s *HTTPServer) handleRESTPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actor := database.GetActor(r.Context())
+	log.Printf("[REST /api/v1/publish] START: ActorID=%s, Payload=%+v", actor.ActorID, reqBody)
+
 	callReq := mcp.JSONRPCRequest{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -306,12 +310,16 @@ func (s *HTTPServer) handleRESTPublish(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if resp != nil && resp.Error != nil {
+		log.Printf("[REST /api/v1/publish] ERROR: %v", resp.Error)
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(resp.Error)
 		return
 	}
+
+	respJSON, _ := json.Marshal(resp.Result)
+	log.Printf("[REST /api/v1/publish] RESPONSE: %s", string(respJSON))
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resp.Result)
+	_, _ = w.Write(respJSON)
 }
 
 func (s *HTTPServer) handleRESTUpload(w http.ResponseWriter, r *http.Request) {
