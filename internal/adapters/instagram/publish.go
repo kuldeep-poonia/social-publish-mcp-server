@@ -267,11 +267,14 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 		return nil, err
 	}
 
-	// 6. Discover Instagram Business Account
-	igAccount, _, err := s.client.GetInstagramBusinessAccount(ctx, accessToken)
+	// 6. Discover Instagram Business Account & Associated Page Access Token
+	igAccount, publishToken, err := s.client.GetInstagramBusinessAccount(ctx, accessToken)
 	if err != nil {
 		_ = s.engine.MarkFailed(ctx, record.ID, err.Error())
 		return nil, err
+	}
+	if publishToken == "" {
+		publishToken = accessToken
 	}
 
 	// 7. Execute 2-Step Publishing with Crash-Recovery and Expired Container Fallback
@@ -287,7 +290,7 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 	// Step A: Check if resuming from existing container in upload_session_uri
 	if record.UploadSessionURI != "" {
 		storedID := record.UploadSessionURI
-		statusResp, pollErr := s.client.PollContainerStatus(ctx, storedID, accessToken)
+		statusResp, pollErr := s.client.PollContainerStatus(ctx, storedID, publishToken)
 		if pollErr == nil && statusResp != nil && statusResp.StatusCode == ContainerStatusFinished {
 			// Container is FINISHED -> Proceed directly to Step 2
 			creationID = storedID
@@ -334,7 +337,7 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 
 		createReq := &CreateContainerRequest{
 			IGUserID:    igAccount.ID,
-			AccessToken: accessToken,
+			AccessToken: publishToken,
 			Caption:     req.Caption,
 			MediaType:   mediaType,
 			ShareToFeed: true,
@@ -356,7 +359,7 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 		_ = s.engine.UpdateResumableSession(ctx, record.ID, creationID, 0)
 
 		// Poll Container Status until FINISHED
-		statusResp, pollErr := s.client.PollContainerStatus(ctx, creationID, accessToken)
+		statusResp, pollErr := s.client.PollContainerStatus(ctx, creationID, publishToken)
 		if pollErr != nil {
 			_ = s.engine.MarkFailed(ctx, record.ID, pollErr.Error())
 			return nil, fmt.Errorf("meta container processing failed: %w", pollErr)
@@ -369,7 +372,7 @@ func (s *Service) Publish(ctx context.Context, req *PublishPostRequest) (*Publis
 	}
 
 	// Step C: Publish Media Container (Step 2)
-	publishedID, pubErr := s.client.PublishMedia(ctx, igAccount.ID, creationID, accessToken)
+	publishedID, pubErr := s.client.PublishMedia(ctx, igAccount.ID, creationID, publishToken)
 	if pubErr != nil {
 		_ = s.engine.MarkFailed(ctx, record.ID, pubErr.Error())
 		return nil, fmt.Errorf("meta media publish failed: %w", pubErr)
@@ -393,6 +396,11 @@ func (s *Service) GetAnalytics(ctx context.Context, userID, mediaID string) (*Un
 	accessToken, _, _, err := s.EnsureFreshToken(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	_, publishToken, discErr := s.client.GetInstagramBusinessAccount(ctx, accessToken)
+	if discErr == nil && publishToken != "" {
+		accessToken = publishToken
 	}
 
 	return s.client.GetMediaInsights(ctx, mediaID, accessToken)
