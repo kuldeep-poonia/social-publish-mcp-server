@@ -94,13 +94,32 @@ func TestPersona_ToneAndPromptAdaptation(t *testing.T) {
 
 	// Test Hook Tone Adaptation
 	sarcasticHook := FormatHookWithTone(p.Tone, "LLM Tooling", "ai_tech")
-	if !strings.Contains(sarcasticHook, "under the hood") {
+	if !strings.Contains(sarcasticHook, "Magic Solution") && !strings.Contains(sarcasticHook, "under the hood") {
 		t.Errorf("expected sarcastic phrasing in hook: %s", sarcasticHook)
 	}
 
-	// Test Forbidden Words Filter
-	cleanText := FilterForbiddenWords("We delve into this paradigm to achieve synergy in AI.", p.ForbiddenWords)
+	// Test All 3 Persona Title Variations
+	vars := GeneratePersonaTitleVariations(p, "Modern AI Frameworks", "ai_tech")
+	if len(vars) != 3 {
+		t.Fatalf("expected 3 title variations, got %d", len(vars))
+	}
+	if !strings.Contains(vars[0], "Magic Solution") {
+		t.Errorf("variation 1 did not adopt sarcastic tone: %s", vars[0])
+	}
+	if !strings.Contains(vars[1], "Uncomfortable Truth") {
+		t.Errorf("variation 2 did not adopt sarcastic tone: %s", vars[1])
+	}
+	if !strings.Contains(vars[2], "We Tested") {
+		t.Errorf("variation 3 did not adopt sarcastic tone: %s", vars[2])
+	}
+
+	// Test Forbidden Words Contextual Rewrite (Preserving Complete Grammar)
+	cleanText := FilterForbiddenWords("This game-changer model creates synergy and allows developers to delve into new paradigm workflows.", p.ForbiddenWords)
 	if strings.Contains(strings.ToLower(cleanText), "delve") || strings.Contains(strings.ToLower(cleanText), "paradigm") || strings.Contains(strings.ToLower(cleanText), "synergy") {
 		t.Errorf("forbidden words were not filtered: %s", cleanText)
+	}
+	// Verify grammatical completeness (contains natural replacement words like "explore", "modern architecture")
+	if !strings.Contains(cleanText, "explore") || !strings.Contains(cleanText, "real integration") {
+		t.Errorf("sentence lost grammatical flow or synonyms: %s", cleanText)
 	}
 }

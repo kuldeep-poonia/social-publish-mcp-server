@@ -253,21 +253,8 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 		cleanSubject = "Modern Workflow"
 	}
 
-	// 3 Distinct High-Converting Angles (Adapted to Brand Persona Tone)
-	var variations []string
-	if p != nil && p.Tone != "" {
-		variations = []string{
-			persona.FormatHookWithTone(p.Tone, cleanSubject, req.Niche),
-			fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
-			fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
-		}
-	} else {
-		variations = []string{
-			fmt.Sprintf("Why %s is the Future of Tech (Complete Breakdown)", cleanSubject),
-			fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
-			fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
-		}
-	}
+	// 3 Distinct High-Converting Angles (All 3 angles strictly adapted to Brand Persona Tone)
+	variations := persona.GeneratePersonaTitleVariations(p, cleanSubject, req.Niche)
 
 	primaryTitle := variations[0]
 	if req.CustomTitle != "" {

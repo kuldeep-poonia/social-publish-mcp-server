@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,12 +44,17 @@ type SetPersonaRequest struct {
 
 // Service manages brand personas and runtime prompt/aesthetic policy enforcement.
 type Service struct {
-	db *sql.DB
+	db             *sql.DB
+	mu             sync.RWMutex
+	memoryPersonas map[string]*BrandPersona
 }
 
 // NewService initializes a new Persona Service.
 func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+	return &Service{
+		db:             db,
+		memoryPersonas: make(map[string]*BrandPersona),
+	}
 }
 
 // SetBrandPersona creates or updates the default persona for a user.
@@ -104,7 +110,7 @@ func (s *Service) SetBrandPersona(ctx context.Context, req *SetPersonaRequest) (
 		}
 	}
 
-	return &BrandPersona{
+	p := &BrandPersona{
 		ID:              personaID,
 		UserID:          req.UserID,
 		BrandName:       req.BrandName,
@@ -117,7 +123,16 @@ func (s *Service) SetBrandPersona(ctx context.Context, req *SetPersonaRequest) (
 		IsDefault:       true,
 		CreatedAt:       now,
 		UpdatedAt:       now,
-	}, nil
+	}
+
+	s.mu.Lock()
+	if s.memoryPersonas == nil {
+		s.memoryPersonas = make(map[string]*BrandPersona)
+	}
+	s.memoryPersonas[req.UserID] = p
+	s.mu.Unlock()
+
+	return p, nil
 }
 
 // GetBrandPersona retrieves the active brand persona for a user, or returns safe defaults.
@@ -127,6 +142,11 @@ func (s *Service) GetBrandPersona(ctx context.Context, userID string) (*BrandPer
 	}
 
 	if s.db == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if p, ok := s.memoryPersonas[userID]; ok && p != nil {
+			return p, nil
+		}
 		return s.DefaultPersona(userID), nil
 	}
 
@@ -146,11 +166,23 @@ func (s *Service) GetBrandPersona(ctx context.Context, userID string) (*BrandPer
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+			if memP, ok := s.memoryPersonas[userID]; ok && memP != nil {
+				return memP, nil
+			}
 			return s.DefaultPersona(userID), nil
 		}
 		return nil, fmt.Errorf("failed querying brand persona: %w", err)
 	}
 	p.ForbiddenWords = []string(forbidden)
+
+	s.mu.Lock()
+	if s.memoryPersonas == nil {
+		s.memoryPersonas = make(map[string]*BrandPersona)
+	}
+	s.memoryPersonas[userID] = &p
+	s.mu.Unlock()
 
 	return &p, nil
 }
@@ -214,33 +246,99 @@ func AdaptImagePrompt(p *BrandPersona, baseSubject string) string {
 		cleanStyle, baseSubject, palette)
 }
 
-// FormatHookWithTone generates a hook in the specific requested brand tone.
-func FormatHookWithTone(tone, subject, niche string) string {
-	cleanTone := strings.ToLower(strings.TrimSpace(tone))
+// GeneratePersonaTitleVariations crafts all 3 CTR title variations aligned strictly with the brand persona's tone.
+func GeneratePersonaTitleVariations(p *BrandPersona, subject, niche string) []string {
+	cleanTone := ""
+	if p != nil {
+		cleanTone = strings.ToLower(strings.TrimSpace(p.Tone))
+	}
+
 	switch {
 	case strings.Contains(cleanTone, "sarcastic") || strings.Contains(cleanTone, "witty"):
-		return fmt.Sprintf("Everyone is hyping %s, but here is what actually happens when you look under the hood", subject)
+		return []string{
+			fmt.Sprintf("Why %s is Not the Magic Solution Everyone Claims It Is", subject),
+			fmt.Sprintf("The Uncomfortable Truth About %s Nobody in Tech Wants to Admit", subject),
+			fmt.Sprintf("We Tested %s in Production So You Don't Have To (Honest Breakdown)", subject),
+		}
+
 	case strings.Contains(cleanTone, "provocative") || strings.Contains(cleanTone, "bold"):
-		return fmt.Sprintf("Why ignoring %s right now might be the biggest mistake in your %s roadmap", subject, niche)
+		return []string{
+			fmt.Sprintf("Why Ignoring %s Right Now Will Cost You Years in %s", subject, niche),
+			fmt.Sprintf("The Brutal Reality of %s Most Creators Are Hiding", subject),
+			fmt.Sprintf("How %s is Silently Destroying Legacy Workflows", subject),
+		}
+
 	case strings.Contains(cleanTone, "casual") || strings.Contains(cleanTone, "chill"):
-		return fmt.Sprintf("Quick breakdown on %s and why it is catching so much attention today", subject)
+		return []string{
+			fmt.Sprintf("A Realistic Look at %s and Why People Actually Care", subject),
+			fmt.Sprintf("What You Actually Need to Know About %s", subject),
+			fmt.Sprintf("Trying Out %s: Simple Breakdown Without the Fluff", subject),
+		}
+
 	case strings.Contains(cleanTone, "academic") || strings.Contains(cleanTone, "technical"):
-		return fmt.Sprintf("An empirical analysis of %s: Architecture, trade-offs, and performance benchmarks", subject)
-	case strings.Contains(cleanTone, "inspirational") || strings.Contains(cleanTone, "authoritative"):
-		return fmt.Sprintf("The breakthrough in %s that is reshaping the future of %s", subject, niche)
+		return []string{
+			fmt.Sprintf("An Empirical Analysis of %s: Architecture and Trade-Offs", subject),
+			fmt.Sprintf("Benchmarking %s: Performance, Latency, and Scalability", subject),
+			fmt.Sprintf("System Design Deep Dive: Deconstructing %s", subject),
+		}
+
 	default:
-		return fmt.Sprintf("The real reason %s is trending across the %s community today", subject, niche)
+		return []string{
+			fmt.Sprintf("Why %s is the Future of Tech (Complete Breakdown)", subject),
+			fmt.Sprintf("The Breakthrough in %s Reshaping %s", subject, niche),
+			fmt.Sprintf("Mastering %s: Everything You Need to Know", subject),
+		}
 	}
 }
 
-// FilterForbiddenWords removes any banned buzzwords from text.
+// FormatHookWithTone generates a hook in the specific requested brand tone.
+func FormatHookWithTone(tone, subject, niche string) string {
+	p := &BrandPersona{Tone: tone}
+	vars := GeneratePersonaTitleVariations(p, subject, niche)
+	if len(vars) > 0 {
+		return vars[0]
+	}
+	return fmt.Sprintf("The real reason %s is trending across %s", subject, niche)
+}
+
+// Common buzzword mappings to natural, non-corporate English synonyms
+var defaultBuzzwordSynonyms = map[string]string{
+	"synergy":       "real integration",
+	"paradigm":      "modern architecture",
+	"delve":         "explore",
+	"game-changer":  "major breakthrough",
+	"game changer":  "major breakthrough",
+	"gamechanger":   "major breakthrough",
+	"plethora":      "wide range",
+	"tapestry":      "ecosystem",
+	"revolutionize": "improve",
+	"unleash":       "unlock",
+	"harness":       "use",
+	"leverage":      "utilize",
+	"cutting-edge":  "modern",
+	"seamless":      "smooth",
+}
+
+// FilterForbiddenWords contextually rewrites banned buzzwords into natural, grammatically correct phrasing.
 func FilterForbiddenWords(text string, forbidden []string) string {
 	for _, word := range forbidden {
-		if strings.TrimSpace(word) == "" {
+		cleanWord := strings.ToLower(strings.TrimSpace(word))
+		if cleanWord == "" {
 			continue
 		}
-		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(strings.TrimSpace(word)) + `\b`)
-		text = re.ReplaceAllString(text, "")
+
+		// Look for natural synonym substitution first
+		replacement, hasSynonym := defaultBuzzwordSynonyms[cleanWord]
+		if !hasSynonym {
+			replacement = ""
+		}
+
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(cleanWord) + `\b`)
+		text = re.ReplaceAllString(text, replacement)
 	}
-	return strings.Join(strings.Fields(text), " ")
+
+	// Clean up double spaces or dangling prepositions like "to into" -> "into"
+	text = regexp.MustCompile(`\bto\s+into\b`).ReplaceAllString(text, "into")
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+	return strings.TrimSpace(text)
 }
