@@ -1,198 +1,156 @@
 # Social Publishing MCP Server — Technical Architecture Specification
 
-This specification details the distributed systems design, zero-trust security model, real-time request lifecycle, resilient asynchronous retry topology, and platform integration adapters of the **Social Publishing MCP Server**.
+This document details the distributed systems architecture, zero-trust cryptographic model, dual-transport MCP networking, autonomous scheduling engine, AI growth subsystems, and cloud infrastructure of the **Social Publishing & Analytics MCP Server**.
 
 ---
 
-## 1. System Architecture Blueprint
+## 1. High-Level System Architecture Blueprint
 
-The Social Publishing MCP Server is engineered for high-concurrency, multi-tenant workloads. It bridges AI assistants (Claude, ChatGPT, Gemini, custom autonomous agents) to external social networks through the **Model Context Protocol (MCP)** standard while enforcing strict cryptographic isolation, zero secret leakage, and kernel-level network guards.
+The server is built with pure **Go (1.26.6)** to achieve microsecond latency, zero runtime garbage collector spikes, and minimal memory footprint. It bridges Large Language Model (LLM) clients to social networks via the **Model Context Protocol (MCP)** specification while maintaining an isolated AES-256-GCM cryptographic vault.
 
 ```mermaid
 flowchart TD
     subgraph ClientLayer["AI Assistants & MCP Clients"]
-        Claude["Claude Desktop / Claude Web"]
-        Agents["Autonomous Multi-Agent Swarms"]
-        GPT["ChatGPT Connectors"]
+        Claude["Claude Desktop / Claude Web\n(Streamable HTTP / SSE)"]
+        Cursor["Cursor IDE / Windsurf\n(MCP Streamable HTTP)"]
+        Agents["Autonomous Multi-Agent Swarms\n(Streamable HTTP + Mcp-Session-Id)"]
+        GPT["ChatGPT Custom Actions\n(OpenAPI 3.1.0 REST)"]
     end
 
-    subgraph IngressGateway["Ingress & Edge Security Layer"]
-        TLS["TLS 1.2+ Forward-Secret AEAD Listener"]
+    subgraph IngressGateway["Ingress & Transport Layer"]
+        TLS["TLS 1.3 Termination (Render Edge)"]
+        DCR["Dynamic Client Registration (RFC 7591)\nPOST /oauth/register"]
+        OAuthDisc["OAuth 2.1 Discovery (RFC 8414)\n/.well-known/oauth-authorization-server"]
+        StreamableHTTP["Streamable HTTP Transport (Primary)\nPOST /mcp (Mcp-Session-Id Tracking)"]
+        LegacySSE["Legacy SSE Transport (Parallel Fallback)\nGET /mcp/sse + POST /mcp/messages"]
+        OpenAPIEngine["OpenAPI 3.1 Gateway (/openapi.json)"]
+    end
+
+    subgraph AuthSession["OAuth 2.1 & Session Management"]
+        PKCEGuard["OAuth 2.1 + PKCE S256 Engine"]
+        SessionStore["Upstash Redis 7 Session Store\n(with In-Memory Sync Fallback)"]
+    end
+
+    subgraph IntelligenceLayer["Autonomous AI & Growth Subsystems"]
+        SchedulerService["internal/scheduler\n(Dual-Trigger: 30s Worker + External Cron Webhook)"]
+        ScoutService["internal/scout\n(Reddit JSON + Hacker News API Ingestion)"]
+        OptimizerService["internal/optimizer\n(3-Angle CTR Title & SEO Tag Synthesis)"]
+        PersonaService["internal/persona\n(Tone Locking & Contextual Buzzword Rewriter)"]
+        GeminiAPI["Google Gemini API\n(models/gemini-2.5-flash)"]
+    end
+
+    subgraph CoreEngine["Core Pipeline & Security Enforcement"]
         RateLimiter["Redis Token-Bucket Distributed Limiter\n(100 RPS / 200 Burst • Fail-Closed)"]
-        AuthServer["OAuth 2.1 Server + PKCE S256 Guard\n(60s Ephemeral Authorization Codes)"]
-        MCPEngine["MCP Protocol Router & SSE Transport\n(Streamable HTTP + JSON-RPC 2.0)"]
-    end
-
-    subgraph CoreEngine["Core Orchestration & Security Subsystems"]
-        SSRFEngine["Kernel-Level Socket SSRF & IP-Pinning Guard\n(net.Dialer.Control Dial Hook)"]
+        SSRFGuard["Kernel Socket SSRF & IP-Pinning Guard\n(net.Dialer.Control Dial Hook)"]
         PublishEngine["Sync-First Publish Orchestrator"]
         AnalyticsEngine["Unified Engagement Telemetry Engine"]
-        AuditLogger["Immutable Cryptographic Audit Logger"]
     end
 
     subgraph AdaptersLayer["Multi-Platform Adapters"]
-        TwitterAdapter["Twitter / X API v2 Adapter\n(Idempotency Locks & Media Ingestion)"]
-        YouTubeAdapter["YouTube Data & Upload API v3 Adapter\n(8MB Resumable Streaming & Quota Budget)"]
-        InstagramAdapter["Meta / Instagram Graph API v20.0 Adapter\n(Async Polling & PNG-to-JPEG Transcoder)"]
+        TwitterAdapter["Twitter / X API v2 Adapter\n(OAuth 2.0 PKCE • Chunked Media • Thread Chains)"]
+        YouTubeAdapter["YouTube Data & Upload API v3 Adapter\n(8MB Resumable Streaming • 10k Quota Vault)"]
+        InstagramAdapter["Meta / Instagram Graph API v21.0 Adapter\n(Container Polling • PNG-to-JPEG Transcoder)"]
     end
 
-    subgraph AsyncResilience["Resilience & Background Retry Topology"]
-        RedisStream[("Redis 7 Stream: publish_retry_stream")]
-        RetryWorkers["Autonomous Retry Worker Pool\n(Jittered Exponential Backoff)"]
-        DLQ[("Dead-Letter Queue: publish_dlq\n(Max Poison Cap: 5 Retries)")]
+    subgraph PersistenceTier["Storage & Resilience Infrastructure"]
+        AESVault["AES-256-GCM Cryptographic Token Vault\n(Per-Record 96-bit Nonce • PBKDF2/Argon2)"]
+        SupabaseDB[("Supabase PostgreSQL 16 DB\n(Scheduled Posts • Brand Personas • Audit Logs)")]
+        UpstashRedis[("Upstash Redis 7\n(Retry Streams • Sessions • Quota Buckets)")]
     end
 
-    subgraph VaultTier["Zero-Trust Storage & Crypto Vault"]
-        AESVault["AES-256-GCM Cryptographic Vault\n(Out-of-Band Master Key Separation)"]
-        PostgresDB[("PostgreSQL 16 Multi-Tenant DB\n(Actor Session Context Isolation)")]
-    end
+    ClientLayer ==>|MCP JSON-RPC / REST| TLS
+    TLS --> DCR & OAuthDisc & StreamableHTTP & LegacySSE & OpenAPIEngine
+    StreamableHTTP & LegacySSE --> PKCEGuard
+    PKCEGuard <==> SessionStore
+    SessionStore <==> UpstashRedis
 
-    ClientLayer ==>|JSON-RPC 2.0 over SSE / HTTPS| TLS
-    TLS --> RateLimiter
-    RateLimiter --> AuthServer
-    AuthServer --> MCPEngine
-    MCPEngine --> PublishEngine & AnalyticsEngine
-    
-    PublishEngine --> SSRFEngine
-    SSRFEngine --> TwitterAdapter & YouTubeAdapter & InstagramAdapter
-    
+    StreamableHTTP & LegacySSE --> RateLimiter
+    RateLimiter --> SchedulerService & ScoutService & OptimizerService & PersonaService & PublishEngine & AnalyticsEngine
+
+    ScoutService & OptimizerService & PersonaService <==>|AI Synthesis| GeminiAPI
+    SchedulerService <==>|Poll Due Posts & Updates| SupabaseDB
+    SchedulerService -->|Dispatch Scheduled Post| PublishEngine
+
+    PublishEngine --> SSRFGuard
+    SSRFGuard --> TwitterAdapter & YouTubeAdapter & InstagramAdapter
+
     TwitterAdapter & YouTubeAdapter & InstagramAdapter <==>|Decrypt OAuth Credentials| AESVault
-    AESVault <==> PostgresDB
-    AuditLogger -.-> PostgresDB
-
-    PublishEngine -.->|On Transient 429/503 Failure| RedisStream
-    RedisStream --> RetryWorkers
-    RetryWorkers --> SSRFEngine
-    RetryWorkers -.->|Delivery Count > 5| DLQ
+    AESVault <==> SupabaseDB
+    PublishEngine -.->|On Transient 429/503 Failure| UpstashRedis
 ```
 
 ---
 
-## 2. End-to-End Request Lifecycle & Publish Pipeline
+## 2. MCP Transport & Networking Layer
 
-The system enforces a **Sync-First Resilient Dispatch** pattern:
-1. **Immediate Execution**: First publish attempts run synchronously against the social platform API for zero-latency response.
-2. **Transient Interception**: If an upstream platform throttles or experiences temporary downtime (HTTP 429 / 503), the payload is AES-encrypted and enqueued into a Redis 7 Stream.
-3. **Background Recovery**: Background workers retry execution with jittered exponential backoff without dropping the user's publication.
+The server implements **dual-transport support** conforming to Model Context Protocol standards:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor LLM as Claude / AI Client
-    participant GW as MCP Gateway & Auth Guard
-    participant RL as Redis Distributed Limiter
-    participant SSRF as Kernel Socket SSRF Guard
-    participant Adapter as Platform Adapter
-    participant Stream as Redis 7 Retry Stream
-    participant SocialAPI as Upstream Social Platform
+### 2.1 Primary: Streamable HTTP Transport (`POST /mcp`)
+- **Single Endpoint Dispatch**: Handles client requests over `POST /mcp` with streaming response capability.
+- **Session Identification**: Tracks multi-turn conversational tool state using the standard `Mcp-Session-Id` HTTP header.
+- **Session Storage**: Sessions are persisted in **Upstash Redis** (TTL: 24 hours) with automatic in-memory fallback for high resilience across container cold starts.
 
-    LLM->>GW: tools/call: publish_post (platform, content, media_urls)
-    GW->>RL: Check User Platform Quota & Rate Limit
-    alt Rate Limit Exceeded
-        RL-->>GW: HTTP 429 Throttled
-        GW-->>LLM: Error: Rate limit exceeded (fail-closed protection)
-    else Limit Allowed
-        RL-->>GW: Token Leased
-        GW->>SSRF: Validate Remote Media URLs (Preflight DNS + CIDR Check)
-        alt Private Subnet / Cloud Metadata IP
-            SSRF-->>GW: SSRF Violation Detected
-            GW-->>LLM: Error: Remote media URL rejected (Security Policy)
-        else Valid Public Media URL
-            SSRF-->>GW: Media Approved
-            GW->>Adapter: Dispatch Publish (with SafeHTTPTransport)
-            Adapter->>SocialAPI: HTTPS TLS 1.2+ API Request
-            alt Initial Attempt Succeeds (HTTP 200/201)
-                SocialAPI-->>Adapter: Post Published (platform_post_id)
-                Adapter-->>GW: Success
-                GW-->>LLM: Result: Published successfully (post_id: 12345)
-            else Transient Upstream Failure (HTTP 429 / 503 / Network Timeout)
-                SocialAPI-->>Adapter: 429 Too Many Requests / 503 Service Unavailable
-                Adapter->>Stream: XADD publish_retry_stream (AES-256 Payload)
-                Stream-->>Adapter: Enqueued Job ID
-                Adapter-->>GW: Transient failure caught, enqueued for retry
-                GW-->>LLM: Result: Queued for automatic background retry
-            end
-        end
-    end
-```
+### 2.2 Parallel Legacy: Server-Sent Events (`GET /mcp/sse` + `POST /mcp/messages`)
+- Maintained in parallel for full backward compatibility with older MCP client builds (e.g. legacy Claude Desktop, Cursor SSE).
+- Dynamic endpoint resolution generates public HTTPS URLs (`data: https://social-mcp.duckdns.org/mcp/messages?sessionId=...`) derived from `X-Forwarded-Proto` / `X-Forwarded-Host`.
+
+### 2.3 Dynamic Client Registration (RFC 7591) & Discovery (RFC 8414)
+- **`POST /oauth/register`**: Implements RFC 7591 DCR, allowing modern MCP clients to register client credentials dynamically without manual developer portal setup.
+- **`GET /.well-known/oauth-authorization-server` & `GET /.well-known/openid-configuration`**: Returns RFC 8414 discovery metadata with strict `https://` issuer scheme enforcement and advertised endpoints (`/oauth/authorize`, `/oauth/token`, `/oauth/register`).
 
 ---
 
-## 3. Resilient Background Worker & Poison Message Quarantine
+## 3. Core Internal Subsystems & Packages
 
-Background workers consume retry streams using Redis Consumer Groups (`XREADGROUP` / `XAUTOCLAIM`). Stalled or poison payloads that cause repeated worker failures are systematically quarantined to prevent worker death spirals:
+### 3.1 Autonomous Scheduling Engine (`internal/scheduler`)
+- **Dual-Trigger Architecture**:
+  1. **Internal Polling Worker**: A lightweight background Go goroutine runs every 30 seconds, querying Supabase for posts where `status = 'pending'` and `scheduled_time <= NOW()`.
+  2. **External Serverless Cron Webhook (`POST /api/v1/cron/execute-scheduled`)**: Allows external cron triggers (GitHub Actions, Cloudflare Workers, EasyCron) to trigger immediate execution of due posts.
+- **Idempotency & Concurrency**: Uses row-level locks (`SELECT ... FOR UPDATE SKIP LOCKED`) to ensure exactly-once execution across distributed instances.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Enqueued: Transient 429/503 Captured
-    Enqueued --> WorkerProcessing: Worker Claims Job (XREADGROUP)
-    
-    state WorkerProcessing {
-        [*] --> JitterDelay: Calculate Exponential Backoff
-        JitterDelay --> SocketDial: Re-verify Destination IP via Kernel Hook
-        SocketDial --> UpstreamCall: Attempt Platform Publish
-    }
+### 3.2 Real-Time Trending Topic Scout (`internal/scout`)
+- **Live Community Discussion Ingestion**:
+  - Reddit: Public subreddit feeds (`/r/artificial`, `/r/technology`, `/r/programming.json`) ingested without API keys.
+  - Hacker News: Official Firebase real-time top stories API (`https://hacker-news.firebaseio.com/v0/topstories.json`).
+- **AI Content Synthesis**: Leverages **Google Gemini 2.5 Flash** (`models/gemini-2.5-flash`) with dynamic brand persona injection to generate platform-specific viral hooks, tailored captions, and sanitized camelCase hashtags.
 
-    WorkerProcessing --> Published: Success (HTTP 200/201)
-    Published --> Acked: XACK & XDEL Job
-    Acked --> [*]
+### 3.3 CTR & SEO Metadata Optimizer (`internal/optimizer`)
+- **Psychological Title Angle Engine**: Generates 3 distinct high-converting title variations for any post topic:
+  1. *Curiosity Gap Angle*: Creates intrigue without misleading.
+  2. *Data-Driven Angle*: Highlights measurable statistics and outcomes.
+  3. *Contrarian Angle*: Challenges common assumptions.
+- **Search Engine Discovery**: Evaluates keyword density and generates platform-tailored discoverability tags for YouTube search and Instagram explore feeds.
 
-    WorkerProcessing --> RetryRequired: Upstream 429/503 Again
-    state RetryCheck <<choice>>
-    RetryRequired --> RetryCheck
-    RetryCheck --> Enqueued: Delivery Count <= 5 (Increment Backoff)
-    RetryCheck --> DeadLetterQueue: Delivery Count > 5 (Poison Cap)
-    
-    DeadLetterQueue --> DLQAlert: Alert SRE & Quarantine (publish_dlq)
-    DLQAlert --> [*]
-```
+### 3.4 Brand Persona & Voice Lock Engine (`internal/persona`)
+- **Persistent Voice Guidelines**: Stores per-tenant tone profiles, audience target rules, and visual aesthetic guidelines in Supabase.
+- **Contextual Buzzword Rewriter**: Replaces forbidden corporate buzzwords (*"delve"*, *"game-changer"*, *"tapestry"*, *"synergy"*) using an LLM rewrite pipeline that reconstructs sentences naturally rather than performing destructive synonym swaps.
 
 ---
 
-## 4. Kernel-Level Socket SSRF & DNS-Rebinding Defense
+## 4. Cloud Infrastructure & Sub-Processors
 
-Standard application-layer URL preflight checks are vulnerable to **Time-of-Check to Time-of-Use (TOCTOU) DNS Rebinding** when background queue workers retry fetches minutes after initial validation.
-
-The Social Publishing MCP Server implements a **Kernel-Level Socket Dial Hook** (`NewSafeHTTPTransport`):
-
-```mermaid
-flowchart LR
-    URL[Remote Media URL] --> DNS[DNS Resolver]
-    DNS --> Socket[Raw TCP Socket Dial]
-    Socket --> Hook["net.Dialer.Control Hook\n(OS Kernel Level)"]
-    
-    subgraph IPValidation["Kernel IP Inspection"]
-        Hook --> Check{"Is IP in Blocklist?"}
-        Check -->|AWS/GCP Metadata: 169.254.169.254| Block[Abort Socket Connection]
-        Check -->|Loopback: 127.0.0.0/8, ::1| Block
-        Check -->|RFC 1918 Private: 10/8, 172.16/12, 192.168/16| Block
-        Check -->|Carrier-Grade NAT: 100.64.0.0/10| Block
-        Check -->|Valid Public IP| Allow[Permit TCP Handshake]
-    end
-    
-    Allow --> TLSHandshake[TLS 1.2+ Handshake]
-    TLSHandshake --> HTTPFetch[Stream Media Bytes]
-```
-
----
-
-## 5. Zero-Trust Storage & Multi-Tenant Actor Isolation
-
-1. **AES-256-GCM Vault**:
-   - Every OAuth token is encrypted with distinct 96-bit random nonces and 128-bit authentication tags.
-   - Master keys are injected strictly via environment configuration from external secret managers (HashiCorp Vault, AWS Secrets Manager, Kubernetes Sealed Secrets) and are never persisted in database snapshots.
-2. **Actor Session Context Isolation**:
-   - Every query automatically validates the requesting actor via `database.GetActor(ctx)`.
-   - SQL queries enforce strict tenant ownership constraints (`WHERE user_id = $1`). Cross-tenant IDOR probes are instantly rejected.
-3. **Immutable Audit Logging**:
-   - Write actions (`publish_post`, `token_refresh`, `disconnect`) generate immutable audit log records with dual-layer secret scrubbing (`[REDACTED]`).
-
----
-
-## 6. Multi-Platform Adapters
-
-| Platform | Primary Protocols | Resilience & Optimization Features |
+| Component | Provider / Infrastructure | Role |
 | :--- | :--- | :--- |
-| **Twitter / X** | Twitter API v2 (`POST /2/tweets`)<br>`upload.twitter.com` | • Transactional idempotency locks preventing duplicate tweets<br>• Multi-image attachment pipeline<br>• Free & Paid tier compatibility |
-| **YouTube** | Google Resumable Chunked Upload Protocol (`upload/v3`) | • $8\text{MB}$ streaming chunks with $<1.0\text{MB}$ heap allocation delta<br>• Resumes failed uploads mid-stream with zero duplicate quota loss<br>• $10{,}000\text{ units/day}$ per-tenant quota budget tracker |
-| **Instagram** | Meta Graph API v20.0 (`/media` + `/media_publish`) | • Two-stage container creation & async state polling<br>• Automatic PNG-to-JPEG transcoding pipeline<br>• Multi-metric engagement analytics (`impressions`, `reach`, `likes`, `comments`, `shares`, `saved`) |
+| **Container Hosting** | **Render Cloud Platform** | Managed container runtime, TLS 1.3 edge listener, automatic zero-downtime deploys. |
+| **Relational Database** | **Supabase (PostgreSQL 16)** | Multi-tenant token vault, scheduled post queue, brand persona storage, audit logs. |
+| **Distributed Caching & Queues** | **Upstash (Redis 7)** | Streamable HTTP sessions, distributed rate limiting, exponential backoff retry queues. |
+| **AI Content Intelligence** | **Google Gemini API** (`gemini-2.5-flash`) | Real-time trending analysis, viral hook generation, CTR metadata optimization, buzzword rewriting. |
+
+---
+
+## 5. Public HTTP Endpoints & Discovery Catalog
+
+| Endpoint | Method | Purpose | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `/` | `GET` | Official Apple-styled web landing page & 1-click connect hub | Public |
+| `/privacy` | `GET` | Full HTML Privacy Policy & sub-processor disclosures | Public |
+| `/terms` | `GET` | Full HTML Terms of Service & AI review guidelines | Public |
+| `/.well-known/oauth-authorization-server` | `GET` | RFC 8414 OAuth 2.1 Discovery Metadata | Public |
+| `/.well-known/openid-configuration` | `GET` | OpenID Connect Discovery Metadata | Public |
+| `/oauth/register` | `POST` | RFC 7591 Dynamic Client Registration (DCR) | Public |
+| `/openapi.json` | `GET` | OpenAPI 3.1.0 specification for ChatGPT Actions | Public |
+| `/health` | `GET` | System healthcheck and database/Redis status | Public |
+| `/mcp` | `POST` | Primary Streamable HTTP MCP transport | Bearer / OAuth |
+| `/mcp/sse` | `GET` | Legacy Server-Sent Events stream | Bearer / OAuth |
+| `/mcp/messages` | `POST` | Legacy SSE JSON-RPC message receiver | Bearer / OAuth |
+| `/api/v1/cron/execute-scheduled` | `POST` | External serverless cron trigger for scheduler | Bearer / Secret |

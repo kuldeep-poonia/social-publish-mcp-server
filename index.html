@@ -1089,7 +1089,7 @@
           <div class="step-card-box">
             <div class="step-number">1</div>
             <h4 class="step-card-title">1. Connect in Claude / Cursor</h4>
-            <p class="step-card-desc">In Claude, click <strong>+</strong> ➔ <strong>Add connector</strong> ➔ <strong>Add custom connector</strong> and enter URL <code>https://social-mcp.duckdns.org/mcp/sse</code>. In Cursor, add it under <strong>Settings ➔ Features ➔ MCP</strong>.</p>
+            <p class="step-card-desc">In Claude Desktop, add URL <code>https://social-mcp.duckdns.org/mcp</code> (Streamable HTTP) or <code>https://social-mcp.duckdns.org/mcp/sse</code> (SSE). In Cursor, add it under <strong>Settings ➔ Features ➔ MCP</strong>.</p>
           </div>
 
           <div class="step-card-box">
@@ -1159,6 +1159,75 @@
               <li><i class="fa-solid fa-check"></i> Automated image transcoding (PNG $\rightarrow$ JPEG)</li>
               <li><i class="fa-solid fa-check"></i> Container status polling state machine</li>
               <li><i class="fa-solid fa-check"></i> 60-day token silent refresh engine</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Advanced AI Growth Subsystems -->
+        <div class="section-header" style="margin-top: 80px; margin-bottom: 40px;">
+          <span class="section-eyebrow">Autonomous Intelligence</span>
+          <h2 class="section-title">AI Growth & Optimization Engine.</h2>
+          <p class="section-desc">Powered by Google Gemini 2.5 Flash, Redis 7 queues, and Supabase PostgreSQL for fully autonomous, brand-aligned social growth.</p>
+        </div>
+
+        <div class="cards-grid-3" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+          <!-- Autonomous Scheduling -->
+          <div class="feature-card">
+            <div class="feature-icon-wrapper icon-queue">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+            <h3 class="feature-name">Autonomous Scheduler</h3>
+            <p class="feature-summary">Dual-trigger cloud posting engine. Combines an internal 30s worker with external serverless cron webhooks for flawless scheduled delivery.</p>
+            <ul class="feature-list">
+              <li><i class="fa-solid fa-check"></i> <code>schedule_post</code> & <code>list_scheduled_posts</code></li>
+              <li><i class="fa-solid fa-check"></i> Dual-trigger 30s worker + cron webhook</li>
+              <li><i class="fa-solid fa-check"></i> Timezone-aware UTC ISO-8601 parsing</li>
+              <li><i class="fa-solid fa-check"></i> Automatic retry queue & dead-letter guard</li>
+            </ul>
+          </div>
+
+          <!-- Live Trending Scout -->
+          <div class="feature-card">
+            <div class="feature-icon-wrapper icon-sec">
+              <i class="fa-solid fa-fire"></i>
+            </div>
+            <h3 class="feature-name">Live Trending Scout</h3>
+            <p class="feature-summary">Real-time Reddit JSON & Hacker News discussion ingestion paired with Gemini 2.5 Flash to synthesize viral hooks, captions, and sanitized tags.</p>
+            <ul class="feature-list">
+              <li><i class="fa-solid fa-check"></i> <code>scout_trending_topics</code> (Reddit & HN)</li>
+              <li><i class="fa-solid fa-check"></i> Gemini 2.5 Flash viral hook generation</li>
+              <li><i class="fa-solid fa-check"></i> Platform-sanitized camelCase hashtags</li>
+              <li><i class="fa-solid fa-check"></i> Zero-cost public API feed ingestion</li>
+            </ul>
+          </div>
+
+          <!-- CTR & SEO Optimizer -->
+          <div class="feature-card">
+            <div class="feature-icon-wrapper icon-db">
+              <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <h3 class="feature-name">CTR & SEO Optimizer</h3>
+            <p class="feature-summary">Algorithmic title evaluation delivering 3 psychological CTR variations (Curiosity Gap, Data-Driven, Contrarian) and ranking tags.</p>
+            <ul class="feature-list">
+              <li><i class="fa-solid fa-check"></i> <code>update_post_metadata</code></li>
+              <li><i class="fa-solid fa-check"></i> <code>optimize_content_seo</code></li>
+              <li><i class="fa-solid fa-check"></i> 3 psychological title angle variations</li>
+              <li><i class="fa-solid fa-check"></i> Search keyword discovery & ranking</li>
+            </ul>
+          </div>
+
+          <!-- Brand Persona Lock -->
+          <div class="feature-card">
+            <div class="feature-icon-wrapper icon-ig">
+              <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <h3 class="feature-name">Brand Persona Voice Lock</h3>
+            <p class="feature-summary">Persistent tone guidelines, visual palette aesthetic rules, and contextual LLM-based rewrites of forbidden corporate buzzwords.</p>
+            <ul class="feature-list">
+              <li><i class="fa-solid fa-check"></i> <code>set_brand_persona</code> & <code>get_brand_persona</code></li>
+              <li><i class="fa-solid fa-check"></i> Persistent voice guidelines & tone lock</li>
+              <li><i class="fa-solid fa-check"></i> Visual palette consistency enforcement</li>
+              <li><i class="fa-solid fa-check"></i> Contextual forbidden buzzword rewrite</li>
             </ul>
           </div>
         </div>
@@ -1251,18 +1320,20 @@
       </div>
 
       <div class="footer-col">
-        <h5>Security & Docs</h5>
+        <h5>Security & Legal</h5>
         <ul class="footer-links">
-          <li><a href="https://social-mcp.duckdns.org/health" target="_blank">Health Endpoint</a></li>
-          <li><a href="#capabilities">API Capabilities</a></li>
-          <li><a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank">GitHub Repository</a></li>
+          <li><a href="/privacy" target="_blank"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</a></li>
+          <li><a href="/terms" target="_blank"><i class="fa-solid fa-scale-balanced"></i> Terms of Service</a></li>
+          <li><a href="/openapi.json" target="_blank"><i class="fa-solid fa-code"></i> OpenAPI 3.1 Spec</a></li>
+          <li><a href="https://social-mcp.duckdns.org/health" target="_blank"><i class="fa-solid fa-heart-pulse"></i> Health Endpoint</a></li>
+          <li><a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank"><i class="fa-brands fa-github"></i> GitHub Repository</a></li>
         </ul>
       </div>
 
       <div class="footer-col">
         <h5>Contact & Support</h5>
         <ul class="footer-links">
-          <li><a href="mailto:kuldeep.poonia.dev@gmail.com"><i class="fa-regular fa-envelope"></i> kuldeep.poonia.dev@gmail.com</a></li>
+          <li><a href="mailto:kuldeeppoonia20298@gmail.com"><i class="fa-regular fa-envelope"></i> kuldeeppoonia20298@gmail.com</a></li>
           <li><a href="https://github.com/kuldeep-poonia" target="_blank"><i class="fa-brands fa-github"></i> github.com/kuldeep-poonia</a></li>
           <li><a href="https://social-mcp.duckdns.org" target="_blank"><i class="fa-solid fa-globe"></i> social-mcp.duckdns.org</a></li>
         </ul>
