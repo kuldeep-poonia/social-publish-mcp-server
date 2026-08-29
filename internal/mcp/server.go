@@ -334,6 +334,45 @@ func (s *Server) RegisterSchedulerTools(scheduleHandler, listScheduledHandler, c
 	}, cancelScheduledHandler)
 }
 
+// RegisterScoutTools registers the scout_trending_topics MCP tool.
+func (s *Server) RegisterScoutTools(scoutHandler ToolHandler) {
+	scoutSchema := `{
+		"type": "object",
+		"properties": {
+			"niche": {
+				"type": "string",
+				"description": "Content niche or category to scan (e.g. 'ai_tech', 'crypto', 'business_startups', 'programming', 'fitness', 'gaming', 'finance')",
+				"enum": ["ai_tech", "tech", "crypto", "business_startups", "programming", "fitness", "gaming", "finance"]
+			},
+			"platform": {
+				"type": "string",
+				"description": "Target social platform for auto-drafting ('twitter', 'instagram', 'youtube', or 'all')",
+				"enum": ["all", "twitter", "instagram", "youtube"]
+			},
+			"limit": {
+				"type": "integer",
+				"description": "Number of top trending topics to analyze (default: 5, max: 20)"
+			},
+			"auto_draft": {
+				"type": "boolean",
+				"description": "If true, auto-generates platform-tailored post drafts with viral hooks, hashtags, and AI image prompts"
+			},
+			"save_drafts": {
+				"type": "boolean",
+				"description": "If true, saves generated post drafts directly into the database as pending drafts"
+			}
+		},
+		"required": ["niche"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "scout_trending_topics",
+		Description: "Scan real-time trending discussions from live public feeds (Reddit & Hacker News), calculate actual engagement velocity (1-100 virality score & momentum), and auto-generate platform-tailored drafts",
+		InputSchema: json.RawMessage(scoutSchema),
+	}, scoutHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()

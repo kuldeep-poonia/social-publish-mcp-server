@@ -21,6 +21,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scout"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/security"
 )
 
@@ -932,9 +933,61 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
+	scoutTrendingHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		if s.scoutService == nil {
+			return nil, errors.New("scout service is not initialized")
+		}
+
+		actor := database.GetActor(ctx)
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil && actualUserID != "" && actualUserID != "anonymous" {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		niche, _ := args["niche"].(string)
+		platform, _ := args["platform"].(string)
+		autoDraft, _ := args["auto_draft"].(bool)
+		saveDrafts, _ := args["save_drafts"].(bool)
+
+		limit := 5
+		if l, ok := args["limit"].(float64); ok && l > 0 {
+			limit = int(l)
+		} else if l, ok := args["limit"].(int); ok && l > 0 {
+			limit = l
+		}
+
+		report, err := s.scoutService.ScoutTrendingTopics(ctx, &scout.ScoutRequest{
+			UserID:     actualUserID,
+			Niche:      niche,
+			Platform:   platform,
+			Limit:      limit,
+			AutoDraft:  autoDraft,
+			SaveDrafts: saveDrafts,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		reportJSON, err := json.Marshal(report)
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding scout report JSON: %w", err)
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(reportJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler)
 	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
 	s.mcpServer.RegisterSchedulerTools(scheduleHandler, listScheduledHandler, cancelScheduledHandler)
+	s.mcpServer.RegisterScoutTools(scoutTrendingHandler)
 }
 
 func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queue.PublishJob) error {

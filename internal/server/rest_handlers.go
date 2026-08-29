@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -251,6 +252,46 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 					"summary":     "List upcoming scheduled posts",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{"description": "List of scheduled posts"},
+					},
+				},
+			},
+			"/api/v1/scout": map[string]interface{}{
+				"post": map[string]interface{}{
+					"operationId": "scoutTrendingTopics",
+					"summary":     "Scan trending topics and generate drafts",
+					"description": "Scans real-time live discussions from Reddit & Hacker News, calculates virality velocity scores, and auto-generates platform drafts.",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"niche": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"ai_tech", "tech", "crypto", "business_startups", "programming", "fitness", "gaming", "finance"},
+										},
+										"platform": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"all", "twitter", "instagram", "youtube"},
+										},
+										"limit": map[string]interface{}{
+											"type": "integer",
+										},
+										"auto_draft": map[string]interface{}{
+											"type": "boolean",
+										},
+										"save_drafts": map[string]interface{}{
+											"type": "boolean",
+										},
+									},
+									"required": []string{"niche"},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Trending topics and generated drafts report"},
 					},
 				},
 			},
@@ -678,4 +719,44 @@ func (s *HTTPServer) handleCronExecuteScheduled(w http.ResponseWriter, r *http.R
 		"status": "success",
 		"report": report,
 	})
+}
+
+func (s *HTTPServer) handleRESTScout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqBody map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil && err != io.EOF {
+		http.Error(w, fmt.Sprintf("Invalid JSON payload: %v", err), http.StatusBadRequest)
+		return
+	}
+	if reqBody == nil {
+		reqBody = make(map[string]interface{})
+	}
+
+	callReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+	}
+	paramsJSON, _ := json.Marshal(map[string]interface{}{
+		"name":      "scout_trending_topics",
+		"arguments": reqBody,
+	})
+	callReq.Params = paramsJSON
+
+	reqBytes, _ := json.Marshal(callReq)
+	resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+	if resp != nil && resp.Error != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(resp.Error)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp.Result)
 }

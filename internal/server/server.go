@@ -24,6 +24,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scout"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/telemetry"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/web"
 	"github.com/redis/go-redis/v9"
@@ -47,6 +48,7 @@ type HTTPServer struct {
 	instagramClient     *instagram.Client
 	mediaStager         *instagram.MediaStager
 	schedulerService    *scheduler.Service
+	scoutService        *scout.Service
 	redisClient         *redis.Client
 	streamQueue         *queue.RedisStreamQueue
 	workerPool          *queue.WorkerPool
@@ -142,6 +144,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		schedulerService.StartWorker(context.Background(), 30*time.Second)
 	}
 
+	scoutService := scout.NewService(db, repo, nil, nil)
+
 	s := &HTTPServer{
 		oauthServer:         oauthServer,
 		mcpServer:           mcpServer,
@@ -158,6 +162,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		instagramClient:     instagramClient,
 		mediaStager:         mediaStager,
 		schedulerService:    schedulerService,
+		scoutService:        scoutService,
 		redisClient:         rdb,
 		streamQueue:         streamQueue,
 		dlqManager:          dlqManager,
@@ -249,6 +254,9 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/api/v1/schedule", s.authMiddleware(s.handleRESTSchedule))
 	mux.HandleFunc("/api/v1/schedule/", s.authMiddleware(s.handleRESTScheduleByID))
 	mux.HandleFunc("/api/v1/cron/execute-scheduled", s.handleCronExecuteScheduled)
+
+	// Trending Topics Scout
+	mux.HandleFunc("/api/v1/scout", s.authMiddleware(s.handleRESTScout))
 
 	// Wrap root with Telemetry, CORS, and Rate Limiting
 	handler := s.telemetryMiddleware(s.rateLimitMiddleware(s.corsMiddleware(mux)))
