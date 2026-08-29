@@ -70,21 +70,26 @@ type Service struct {
 	repo           *database.Repository
 	redditIngestor Ingestor
 	hnIngestor     Ingestor
+	geminiGen      GeminiGenerator
 }
 
 // NewService initializes a new Scout Service.
-func NewService(db *sql.DB, repo *database.Repository, redditIngestor, hnIngestor Ingestor) *Service {
+func NewService(db *sql.DB, repo *database.Repository, redditIngestor, hnIngestor Ingestor, geminiGen GeminiGenerator) *Service {
 	if redditIngestor == nil {
 		redditIngestor = NewRedditIngestor(nil)
 	}
 	if hnIngestor == nil {
 		hnIngestor = NewHackerNewsIngestor(nil)
 	}
+	if geminiGen == nil {
+		geminiGen = NewGeminiClient("", nil)
+	}
 	return &Service{
 		db:             db,
 		repo:           repo,
 		redditIngestor: redditIngestor,
 		hnIngestor:     hnIngestor,
+		geminiGen:      geminiGen,
 	}
 }
 
@@ -205,8 +210,18 @@ func (s *Service) ScoutTrendingTopics(ctx context.Context, req *ScoutRequest) (*
 
 	for _, sc := range scored {
 		it := sc.item
-		hook := s.generateHookAngle(it.Title, niche)
-		hashtags := s.generateHashtags(it.Title, niche)
+		aiContent, err := s.geminiGen.GenerateTopicContent(ctx, it.Title, it.Content, niche, targetPlatform)
+		if err != nil || aiContent == nil {
+			aiContent = &GeneratedTopicContent{
+				Hook:               s.generateHookAngle(it.Title, niche),
+				Hashtags:           s.generateHashtags(it.Title, niche),
+				TwitterDraft:       fmt.Sprintf("🔥 %s\n\n%s", it.Title, it.SourceURL),
+				InstagramCaption:   fmt.Sprintf("✨ %s\n\n%s", it.Title, it.SourceURL),
+				ImagePrompt:        fmt.Sprintf("Editorial render for %s", it.Title),
+				YouTubeTitle:       it.Title,
+				YouTubeDescription: fmt.Sprintf("Deep dive into %s", it.Title),
+			}
+		}
 
 		topic := TrendingTopic{
 			Topic:                 it.Title,
@@ -218,16 +233,49 @@ func (s *Service) ScoutTrendingTopics(ctx context.Context, req *ScoutRequest) (*
 			ViralityScore:         sc.score,
 			Momentum:              sc.momentum,
 			VelocityPointsPerHour: math.Round(sc.velocity*10) / 10,
-			ViralHookAngle:        hook,
-			SuggestedHashtags:     hashtags,
+			ViralHookAngle:        aiContent.Hook,
+			SuggestedHashtags:     aiContent.Hashtags,
 			Drafts:                make(map[string]PlatformDraft),
 		}
 
 		if req.AutoDraft {
-			drafts := s.synthesizeDrafts(it.Title, hook, hashtags, niche, targetPlatform)
+			drafts := make(map[string]PlatformDraft)
+
+			// 1. Twitter Draft
+			if targetPlatform == "all" || targetPlatform == "twitter" {
+				drafts["twitter"] = PlatformDraft{
+					Platform: "twitter",
+					Content:  aiContent.TwitterDraft,
+					Hashtags: aiContent.Hashtags[:min(3, len(aiContent.Hashtags))],
+				}
+			}
+
+			// 2. Instagram Draft
+			if targetPlatform == "all" || targetPlatform == "instagram" {
+				drafts["instagram"] = PlatformDraft{
+					Platform:    "instagram",
+					Content:     aiContent.InstagramCaption,
+					Hashtags:    aiContent.Hashtags,
+					ImagePrompt: aiContent.ImagePrompt,
+				}
+			}
+
+			// 3. YouTube Shorts/Video Draft
+			if targetPlatform == "all" || targetPlatform == "youtube" {
+				drafts["youtube"] = PlatformDraft{
+					Platform: "youtube",
+					Title:    aiContent.YouTubeTitle,
+					Content:  aiContent.YouTubeDescription,
+					Hashtags: aiContent.Hashtags,
+				}
+			}
 
 			if req.SaveDrafts && s.db != nil && req.UserID != "" {
-				for pName, d := range drafts {
+				for _, pName := range []string{"twitter", "instagram", "youtube"} {
+					d, ok := drafts[pName]
+					if !ok {
+						continue
+					}
 					draftID, err := s.saveDraftToDB(ctx, req.UserID, pName, d.Content, d.Title, d.ImagePrompt, d.Hashtags, it.SourceURL)
 					if err == nil {
 						d.DraftPostID = draftID

@@ -58,6 +58,7 @@ type Config struct {
 	InstagramRedirectURI   string
 	InstagramWebhookSecret string
 	PublicBaseURL          string
+	GeminiAPIKey           string
 }
 
 // LoadConfig reads configuration from environment variables and validates critical constraints.
@@ -95,6 +96,7 @@ func LoadConfig() (*Config, error) {
 		InstagramRedirectURI:     getEnv("INSTAGRAM_REDIRECT_URI", ""),
 		InstagramWebhookSecret:   getEnv("INSTAGRAM_WEBHOOK_SECRET", ""),
 		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", "https://social-mcp.duckdns.org"),
+		GeminiAPIKey:             getEnv("GEMINI_API_KEY", ""),
 	}
 
 	// Validate and decode Token Encryption Key

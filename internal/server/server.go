@@ -144,7 +144,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		schedulerService.StartWorker(context.Background(), 30*time.Second)
 	}
 
-	scoutService := scout.NewService(db, repo, nil, nil)
+	geminiGen := scout.NewGeminiClient(cfg.GeminiAPIKey, nil)
+	scoutService := scout.NewService(db, repo, nil, nil, geminiGen)
 
 	s := &HTTPServer{
 		oauthServer:         oauthServer,
