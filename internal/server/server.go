@@ -248,6 +248,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	// MCP Protocol Endpoints (Streamable HTTP + Legacy Parallel SSE with 12-Month Migration Window)
 	mux.HandleFunc("/mcp", s.authMiddleware(transport.HandleStreamableHTTP))
+	mux.HandleFunc("/mcp/", s.authMiddleware(transport.HandleStreamableHTTP))
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
 	mux.HandleFunc("/mcp/sse", s.authMiddleware(transport.HandleSSE))
 	mux.HandleFunc("/mcp/messages", s.authMiddleware(transport.HandleMessages))

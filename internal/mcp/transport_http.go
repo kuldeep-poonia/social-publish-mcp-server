@@ -66,6 +66,20 @@ func (t *HTTPTransport) HandleStreamableHTTP(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	cleanPath := strings.TrimRight(r.URL.Path, "/")
+	if cleanPath == "/mcp/sse" {
+		t.HandleSSE(w, r)
+		return
+	}
+	if cleanPath == "/mcp/messages" {
+		t.HandleMessages(w, r)
+		return
+	}
+	if cleanPath == "/mcp/rpc" {
+		t.HandleDirectRPC(w, r)
+		return
+	}
+
 	// Session ID management per MCP Streamable HTTP specification
 	sessionID := strings.TrimSpace(r.Header.Get("Mcp-Session-Id"))
 	if sessionID == "" {
