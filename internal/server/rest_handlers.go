@@ -295,6 +295,62 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 					},
 				},
 			},
+			"/api/v1/posts/metadata": map[string]interface{}{
+				"post": map[string]interface{}{
+					"operationId": "updatePostMetadata",
+					"summary":     "Update and optimize post title, description, and tags for CTR",
+					"description": "CTR-based title, description, and keyword tags optimization engine. Generates high-converting curiosity hooks and applies live updates.",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"post_id": map[string]interface{}{
+											"type": "string",
+										},
+										"platform": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"youtube", "instagram", "twitter"},
+										},
+										"objective": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"ctr_boost", "seo_search", "viral_rehook", "retention"},
+										},
+										"niche": map[string]interface{}{
+											"type": "string",
+										},
+										"target_audience": map[string]interface{}{
+											"type": "string",
+										},
+										"custom_title": map[string]interface{}{
+											"type": "string",
+										},
+										"custom_description": map[string]interface{}{
+											"type": "string",
+										},
+										"custom_tags": map[string]interface{}{
+											"type":  "array",
+											"items": map[string]string{"type": "string"},
+										},
+										"auto_optimize_ai": map[string]interface{}{
+											"type": "boolean",
+										},
+										"apply_live": map[string]interface{}{
+											"type": "boolean",
+										},
+									},
+									"required": []string{"post_id"},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Metadata optimization report and live update confirmation"},
+					},
+				},
+			},
 			"/api/v1/connect": map[string]interface{}{
 				"get": map[string]interface{}{
 					"operationId": "connectPlatform",
@@ -759,4 +815,85 @@ func (s *HTTPServer) handleRESTScout(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp.Result)
+}
+
+func (s *HTTPServer) handleRESTUpdateMetadata(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method Not Allowed, use POST or PUT", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqBody map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil && err != io.EOF {
+		http.Error(w, fmt.Sprintf("Invalid JSON payload: %v", err), http.StatusBadRequest)
+		return
+	}
+	if reqBody == nil {
+		reqBody = make(map[string]interface{})
+	}
+
+	callReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+	}
+	paramsJSON, _ := json.Marshal(map[string]interface{}{
+		"name":      "update_post_metadata",
+		"arguments": reqBody,
+	})
+	callReq.Params = paramsJSON
+
+	reqBytes, _ := json.Marshal(callReq)
+	resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+	if resp != nil && resp.Error != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(resp.Error)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp.Result)
+}
+
+func (s *HTTPServer) handleRESTPostRouting(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	// Expected /api/v1/posts/{id}/metadata
+	if len(pathParts) >= 5 && pathParts[4] == "metadata" {
+		postID := pathParts[3]
+		var reqBody map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		if reqBody == nil {
+			reqBody = make(map[string]interface{})
+		}
+		reqBody["post_id"] = postID
+
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+		paramsJSON, _ := json.Marshal(map[string]interface{}{
+			"name":      "update_post_metadata",
+			"arguments": reqBody,
+		})
+		callReq.Params = paramsJSON
+
+		reqBytes, _ := json.Marshal(callReq)
+		resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+		if resp != nil && resp.Error != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp.Error)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp.Result)
+		return
+	}
+
+	http.Error(w, "Not Found", http.StatusNotFound)
 }

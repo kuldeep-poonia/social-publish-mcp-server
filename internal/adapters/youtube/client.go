@@ -46,6 +46,16 @@ func NewClient(clientID, clientSecret string) *Client {
 	}
 }
 
+// SetAPIBaseForTesting overrides API base URL for test mocking.
+func (c *Client) SetAPIBaseForTesting(u string) {
+	c.apiBase = u
+}
+
+// SetTokenURLForTesting overrides token URL for test mocking.
+func (c *Client) SetTokenURLForTesting(u string) {
+	c.tokenURL = u
+}
+
 // ExchangeOAuthToken exchanges an authorization code for access and refresh tokens.
 func (c *Client) ExchangeOAuthToken(ctx context.Context, code, codeVerifier, redirectURI string) (*TokenResponse, error) {
 	data := url.Values{}

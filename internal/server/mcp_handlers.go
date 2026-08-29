@@ -19,6 +19,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/youtube"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/optimizer"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scout"
@@ -984,10 +985,91 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
+	updateMetadataHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required for metadata update")
+		}
+
+		if s.optimizerService == nil {
+			return nil, errors.New("optimizer service is not initialized")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		postID, _ := args["post_id"].(string)
+		if postID == "" {
+			return nil, errors.New("post_id is required")
+		}
+
+		platform, _ := args["platform"].(string)
+		objective, _ := args["objective"].(string)
+		niche, _ := args["niche"].(string)
+		targetAudience, _ := args["target_audience"].(string)
+		customTitle, _ := args["custom_title"].(string)
+		customDesc, _ := args["custom_description"].(string)
+
+		var customTags []string
+		if rawTags, ok := args["custom_tags"].([]interface{}); ok {
+			for _, t := range rawTags {
+				if str, ok := t.(string); ok && str != "" {
+					customTags = append(customTags, str)
+				}
+			}
+		}
+
+		autoOptimize := true
+		if optVal, ok := args["auto_optimize_ai"].(bool); ok {
+			autoOptimize = optVal
+		}
+
+		applyLive := true
+		if liveVal, ok := args["apply_live"].(bool); ok {
+			applyLive = liveVal
+		}
+
+		report, err := s.optimizerService.UpdatePostMetadata(ctx, &optimizer.UpdateMetadataRequest{
+			UserID:            actualUserID,
+			PostID:            postID,
+			Platform:          platform,
+			Objective:         objective,
+			Niche:             niche,
+			TargetAudience:    targetAudience,
+			CustomTitle:       customTitle,
+			CustomDescription: customDesc,
+			CustomTags:        customTags,
+			AutoOptimizeAI:    autoOptimize,
+			ApplyLive:         applyLive,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		reportJSON, err := json.Marshal(report)
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding metadata report JSON: %w", err)
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(reportJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler)
 	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
 	s.mcpServer.RegisterSchedulerTools(scheduleHandler, listScheduledHandler, cancelScheduledHandler)
 	s.mcpServer.RegisterScoutTools(scoutTrendingHandler)
+	s.mcpServer.RegisterOptimizerTools(updateMetadataHandler)
 }
 
 func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queue.PublishJob) error {

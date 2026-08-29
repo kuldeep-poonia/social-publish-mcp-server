@@ -373,6 +373,66 @@ func (s *Server) RegisterScoutTools(scoutHandler ToolHandler) {
 	}, scoutHandler)
 }
 
+// RegisterOptimizerTools registers the update_post_metadata MCP tool.
+func (s *Server) RegisterOptimizerTools(updateMetadataHandler ToolHandler) {
+	updateSchema := `{
+		"type": "object",
+		"properties": {
+			"post_id": {
+				"type": "string",
+				"description": "Database post UUID OR Live platform video/post ID to update"
+			},
+			"platform": {
+				"type": "string",
+				"description": "Target social media platform ('youtube', 'instagram', 'twitter')",
+				"enum": ["youtube", "instagram", "twitter"]
+			},
+			"objective": {
+				"type": "string",
+				"description": "Optimization goal (e.g. 'ctr_boost', 'seo_search', 'viral_rehook', 'retention')",
+				"enum": ["ctr_boost", "seo_search", "viral_rehook", "retention"]
+			},
+			"niche": {
+				"type": "string",
+				"description": "Content niche (e.g. 'ai_tech', 'finance', 'fitness', 'gaming')"
+			},
+			"target_audience": {
+				"type": "string",
+				"description": "Target viewer/reader demographic description"
+			},
+			"custom_title": {
+				"type": "string",
+				"description": "Optional custom title to apply directly"
+			},
+			"custom_description": {
+				"type": "string",
+				"description": "Optional custom description or caption"
+			},
+			"custom_tags": {
+				"type": "array",
+				"items": {"type": "string"},
+				"description": "Optional custom keyword tags list"
+			},
+			"auto_optimize_ai": {
+				"type": "boolean",
+				"description": "If true, utilizes AI / CTR optimization to craft high-converting title variations, structured descriptions, and tags"
+			},
+			"apply_live": {
+				"type": "boolean",
+				"description": "If true, immediately invokes live platform APIs (e.g. YouTube videos.update) to apply changes"
+			}
+		},
+		"required": ["post_id"],
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "update_post_metadata",
+		Description: "CTR-based title, description, and keyword tags optimization engine. Generates high-converting curiosity hooks, SEO search tags, and applies live metadata updates to YouTube and database records",
+		InputSchema: json.RawMessage(updateSchema),
+	}, updateMetadataHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()
