@@ -75,6 +75,10 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 				"type": "string",
 				"description": "Text content or caption of the post"
 			},
+			"image_prompt": {
+				"type": "string",
+				"description": "Optional prompt to auto-generate a stunning AI image visual on-the-fly when publishing without external URL or Base64"
+			},
 			"media_urls": {
 				"type": "array",
 				"items": {"type": "string"},
@@ -83,6 +87,10 @@ func (s *Server) RegisterSocialTools(publishHandler, analyticsHandler, connectHa
 			"media_data": {
 				"type": "string",
 				"description": "Optional Base64-encoded binary string of any AI-generated or local image/video to auto-stage and publish"
+			},
+			"media_type": {
+				"type": "string",
+				"description": "Optional media type (IMAGE or REELS for Instagram)"
 			},
 			"idempotency_key": {
 				"type": "string",

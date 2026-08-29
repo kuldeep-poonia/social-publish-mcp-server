@@ -48,16 +48,24 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 											"type":        "string",
 											"description": "Caption, title, or tweet text",
 										},
+										"image_prompt": map[string]interface{}{
+											"type":        "string",
+											"description": "Optional prompt to auto-generate a stunning AI image visual on-the-fly when publishing without external URL or Base64 (solves ChatGPT sandbox limitations)",
+										},
 										"media_urls": map[string]interface{}{
 											"type": "array",
 											"items": map[string]string{
 												"type": "string",
 											},
-											"description": "URLs of media attachments (including URLs from DALL-E generated images in this chat)",
+											"description": "URLs of public media attachments",
 										},
 										"media_data": map[string]interface{}{
 											"type":        "string",
 											"description": "Optional Base64-encoded binary string of any AI-generated or local image/video to auto-stage and publish",
+										},
+										"media_type": map[string]interface{}{
+											"type":        "string",
+											"description": "Optional media type ('IMAGE' or 'REELS' for Instagram)",
 										},
 										"idempotency_key": map[string]interface{}{
 											"type":        "string",

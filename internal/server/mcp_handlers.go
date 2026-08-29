@@ -270,6 +270,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 			}
 			mediaType, _ := args["media_type"].(string)
 			mediaPath, _ := args["media_path"].(string)
+			imagePrompt, _ := args["image_prompt"].(string)
 
 			var mediaData []byte
 			if rawData, ok := args["media_data"].(string); ok && len(rawData) > 0 {
@@ -287,6 +288,7 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 				MediaPath:      mediaPath,
 				MediaData:      mediaData,
 				MediaType:      mediaType,
+				ImagePrompt:    imagePrompt,
 				IdempotencyKey: idempotencyKey,
 			})
 			if err != nil {
