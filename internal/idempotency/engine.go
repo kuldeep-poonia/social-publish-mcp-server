@@ -69,11 +69,11 @@ func (e *Engine) AcquireLockWithContent(ctx context.Context, userID, platform, i
 			return &record, LockInFlight, ErrInFlightConflict
 		}
 
-		// State is failed OR stale processing lock -> attempt atomic reclaim
+		// State is scheduled, failed OR stale processing lock -> attempt atomic reclaim
 		reclaimQuery := `
 			UPDATE posts
 			SET status = 'processing', updated_at = $1
-			WHERE id = $2 AND (status = 'failed' OR (status = 'processing' AND updated_at < $3));
+			WHERE id = $2 AND (status = 'scheduled' OR status = 'failed' OR (status = 'processing' AND updated_at < $3));
 		`
 		res, execErr := e.db.ExecContext(ctx, reclaimQuery, now, record.ID, staleCutoff)
 		if execErr != nil {

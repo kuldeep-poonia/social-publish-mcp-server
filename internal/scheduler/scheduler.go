@@ -113,6 +113,16 @@ func (s *Service) SchedulePost(ctx context.Context, req *SchedulePostRequest) (*
 		return nil, errors.New("scheduler: content, image_prompt, or media must be provided")
 	}
 
+	if req.MediaPath != "" {
+		fileInfo, statErr := os.Stat(req.MediaPath)
+		if statErr != nil {
+			return nil, fmt.Errorf("scheduler: local media file '%s' does not exist or is not accessible on the server. In cloud environments (e.g. Render) or remote MCP clients, local client filesystem paths cannot be reached. Please supply a public HTTPS URL via 'media_urls' or upload Base64 binary via 'media_data' / upload endpoint: %w", req.MediaPath, statErr)
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("scheduler: media_path '%s' is a directory, expected a media file", req.MediaPath)
+		}
+	}
+
 	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
 	if idempotencyKey == "" {
 		idempotencyKey = fmt.Sprintf("sched-%s-%s-%d", platform, req.UserID, req.ScheduledAt.Unix())
@@ -286,12 +296,8 @@ func (s *Service) ExecuteDuePosts(ctx context.Context) (*ExecutionReport, error)
 		return report, nil
 	}
 
-	// Mark all fetched posts as 'processing'
-	for _, dp := range batch {
-		_, _ = tx.ExecContext(ctx, "UPDATE posts SET status = 'processing', updated_at = $1 WHERE id = $2", now, dp.id)
-	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("scheduler: failed committing processing state: %w", err)
+		return nil, fmt.Errorf("scheduler: failed committing due posts tx: %w", err)
 	}
 
 	// 2. Execute publishing for each post
