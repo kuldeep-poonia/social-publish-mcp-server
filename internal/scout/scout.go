@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/persona"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/pkg/models"
 )
 
@@ -71,10 +72,11 @@ type Service struct {
 	redditIngestor Ingestor
 	hnIngestor     Ingestor
 	geminiGen      GeminiGenerator
+	personaService *persona.Service
 }
 
 // NewService initializes a new Scout Service.
-func NewService(db *sql.DB, repo *database.Repository, redditIngestor, hnIngestor Ingestor, geminiGen GeminiGenerator) *Service {
+func NewService(db *sql.DB, repo *database.Repository, redditIngestor, hnIngestor Ingestor, geminiGen GeminiGenerator, personaService *persona.Service) *Service {
 	if redditIngestor == nil {
 		redditIngestor = NewRedditIngestor(nil)
 	}
@@ -90,6 +92,7 @@ func NewService(db *sql.DB, repo *database.Repository, redditIngestor, hnIngesto
 		redditIngestor: redditIngestor,
 		hnIngestor:     hnIngestor,
 		geminiGen:      geminiGen,
+		personaService: personaService,
 	}
 }
 
@@ -205,19 +208,27 @@ func (s *Service) ScoutTrendingTopics(ctx context.Context, req *ScoutRequest) (*
 		targetPlatform = "all"
 	}
 
+	var activePersona *persona.BrandPersona
+	if s.personaService != nil && req.UserID != "" {
+		activePersona, _ = s.personaService.GetBrandPersona(ctx, req.UserID)
+	}
+	if activePersona == nil && s.personaService != nil {
+		activePersona = s.personaService.DefaultPersona(req.UserID)
+	}
+
 	var topics []TrendingTopic
 	var savedDraftsCount int
 
 	for _, sc := range scored {
 		it := sc.item
-		aiContent, err := s.geminiGen.GenerateTopicContent(ctx, it.Title, it.Content, niche, targetPlatform)
+		aiContent, err := s.geminiGen.GenerateTopicContent(ctx, it.Title, it.Content, niche, targetPlatform, activePersona)
 		if err != nil || aiContent == nil {
 			aiContent = &GeneratedTopicContent{
 				Hook:               s.generateHookAngle(it.Title, niche),
 				Hashtags:           s.generateHashtags(it.Title, niche),
 				TwitterDraft:       fmt.Sprintf("🔥 %s\n\n%s", it.Title, it.SourceURL),
 				InstagramCaption:   fmt.Sprintf("✨ %s\n\n%s", it.Title, it.SourceURL),
-				ImagePrompt:        fmt.Sprintf("Editorial render for %s", it.Title),
+				ImagePrompt:        persona.AdaptImagePrompt(activePersona, it.Title),
 				YouTubeTitle:       it.Title,
 				YouTubeDescription: fmt.Sprintf("Deep dive into %s", it.Title),
 			}

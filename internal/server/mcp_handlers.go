@@ -20,6 +20,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/optimizer"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/persona"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scout"
@@ -1065,11 +1066,110 @@ func (s *HTTPServer) registerMCPToolHandlers() {
 		}, nil
 	}
 
+	setPersonaHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required to configure brand persona")
+		}
+
+		if s.personaService == nil {
+			return nil, errors.New("persona service is not initialized")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		brandName, _ := args["brand_name"].(string)
+		tone, _ := args["tone"].(string)
+		visualStyle, _ := args["visual_style"].(string)
+		colorPalette, _ := args["color_palette"].(string)
+		voiceGuidelines, _ := args["voice_guidelines"].(string)
+		targetAudience, _ := args["target_audience"].(string)
+
+		var forbiddenWords []string
+		if rawWords, ok := args["forbidden_words"].([]interface{}); ok {
+			for _, w := range rawWords {
+				if str, ok := w.(string); ok && str != "" {
+					forbiddenWords = append(forbiddenWords, str)
+				}
+			}
+		}
+
+		p, err := s.personaService.SetBrandPersona(ctx, &persona.SetPersonaRequest{
+			UserID:          actualUserID,
+			BrandName:       brandName,
+			Tone:            tone,
+			VisualStyle:     visualStyle,
+			ColorPalette:    colorPalette,
+			VoiceGuidelines: voiceGuidelines,
+			ForbiddenWords:  forbiddenWords,
+			TargetAudience:  targetAudience,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		pJSON, err := json.Marshal(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding persona JSON: %w", err)
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(pJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	getPersonaHandler := func(ctx context.Context, args map[string]interface{}) (*mcp.CallToolResult, error) {
+		actor := database.GetActor(ctx)
+		if actor.ActorID == "" || actor.ActorID == "anonymous" {
+			return nil, errors.New("unauthorized: authenticated user session required")
+		}
+
+		if s.personaService == nil {
+			return nil, errors.New("persona service is not initialized")
+		}
+
+		actualUserID := actor.ActorID
+		if _, err := uuid.Parse(actualUserID); err != nil && s.repo != nil {
+			user, userErr := s.repo.GetOrCreateUserByUsername(ctx, actualUserID, fmt.Sprintf("%s@example.com", actualUserID))
+			if userErr == nil && user != nil {
+				actualUserID = user.ID
+			}
+		}
+
+		p, err := s.personaService.GetBrandPersona(ctx, actualUserID)
+		if err != nil {
+			return nil, err
+		}
+
+		pJSON, err := json.Marshal(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed encoding persona JSON: %w", err)
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.ToolContent{
+				{Type: "text", Text: string(pJSON)},
+			},
+			IsError: false,
+		}, nil
+	}
+
 	s.mcpServer.RegisterSocialTools(publishHandler, analyticsHandler, connectHandler, uploadHandler)
 	s.mcpServer.RegisterInsightsAndOptimizationTools(accountInsightsHandler, optimizeContentHandler)
 	s.mcpServer.RegisterSchedulerTools(scheduleHandler, listScheduledHandler, cancelScheduledHandler)
 	s.mcpServer.RegisterScoutTools(scoutTrendingHandler)
 	s.mcpServer.RegisterOptimizerTools(updateMetadataHandler)
+	s.mcpServer.RegisterPersonaTools(setPersonaHandler, getPersonaHandler)
 }
 
 func (s *HTTPServer) handleBackgroundPublishRetry(ctx context.Context, job *queue.PublishJob) error {

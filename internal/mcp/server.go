@@ -433,6 +433,64 @@ func (s *Server) RegisterOptimizerTools(updateMetadataHandler ToolHandler) {
 	}, updateMetadataHandler)
 }
 
+// RegisterPersonaTools registers brand persona configuration and retrieval tools.
+func (s *Server) RegisterPersonaTools(setPersonaHandler, getPersonaHandler ToolHandler) {
+	setSchema := `{
+		"type": "object",
+		"properties": {
+			"brand_name": {
+				"type": "string",
+				"description": "The name of the brand, channel, or creator identity"
+			},
+			"tone": {
+				"type": "string",
+				"enum": ["sarcastic", "witty", "authoritative", "casual_chill", "bold_provocative", "academic", "inspirational"],
+				"description": "The personality and tone of voice for all generated content"
+			},
+			"visual_style": {
+				"type": "string",
+				"description": "Visual aesthetic style (e.g. 'cyberpunk dark neon', 'minimalist studio', 'retro 90s vintage')"
+			},
+			"color_palette": {
+				"type": "string",
+				"description": "Color palette for image prompts (e.g. '#0F172A, #38BDF8, #818CF8' or 'Neon Green & Obsidian Black')"
+			},
+			"voice_guidelines": {
+				"type": "string",
+				"description": "Rules for sentence length, rhetoric, and personality quirks"
+			},
+			"forbidden_words": {
+				"type": "array",
+				"items": {"type": "string"},
+				"description": "List of prohibited words or corporate jargon (e.g. ['synergy', 'delve', 'paradigm'])"
+			},
+			"target_audience": {
+				"type": "string",
+				"description": "Target demographic or audience definition"
+			}
+		},
+		"additionalProperties": false
+	}`
+
+	getSchema := `{
+		"type": "object",
+		"properties": {},
+		"additionalProperties": false
+	}`
+
+	s.RegisterTool(Tool{
+		Name:        "set_brand_persona",
+		Description: "Locks brand tone, visual aesthetic, color palette, voice guidelines, and forbidden buzzwords for autonomous content generation",
+		InputSchema: json.RawMessage(setSchema),
+	}, setPersonaHandler)
+
+	s.RegisterTool(Tool{
+		Name:        "get_brand_persona",
+		Description: "Retrieves the currently locked brand persona and voice configuration",
+		InputSchema: json.RawMessage(getSchema),
+	}, getPersonaHandler)
+}
+
 // RegisterTool adds an executable tool with schema to the MCP server.
 func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	s.mu.Lock()

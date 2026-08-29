@@ -183,7 +183,7 @@ func TestScoutService_EndToEndDraftSynthesisAndPersistence(t *testing.T) {
 		},
 	}
 
-	svc := NewService(db, nil, mockReddit, mockHN, nil)
+	svc := NewService(db, nil, mockReddit, mockHN, nil, nil)
 	ctx := database.WithActor(context.Background(), database.ActorContext{ActorID: testUserID})
 
 	// Set expectation for SaveDrafts DB insertions (1 topic * 3 platforms = 3 drafts)
@@ -261,7 +261,7 @@ func TestScoutService_RateLimitGracefulHandling(t *testing.T) {
 	mockReddit := &staticIngestor{err: ErrRateLimited}
 	mockHN := &staticIngestor{err: ErrRateLimited}
 
-	svc := NewService(nil, nil, mockReddit, mockHN, nil)
+	svc := NewService(nil, nil, mockReddit, mockHN, nil, nil)
 	_, err := svc.ScoutTrendingTopics(context.Background(), &ScoutRequest{Niche: "ai_tech"})
 
 	if !errors.Is(err, ErrRateLimited) {
@@ -273,9 +273,9 @@ func TestPerTopicDistinctDrafts(t *testing.T) {
 	gen := NewGeminiClient("", nil)
 	ctx := context.Background()
 
-	t1, _ := gen.GenerateTopicContent(ctx, "GUIs should be fully keyboard-driven", "article details", "ai_tech", "all")
-	t2, _ := gen.GenerateTopicContent(ctx, "GLM-5.3 is now open-weight", "article details", "ai_tech", "all")
-	t3, _ := gen.GenerateTopicContent(ctx, "Htmx 4.0", "article details", "ai_tech", "all")
+	t1, _ := gen.GenerateTopicContent(ctx, "GUIs should be fully keyboard-driven", "article details", "ai_tech", "all", nil)
+	t2, _ := gen.GenerateTopicContent(ctx, "GLM-5.3 is now open-weight", "article details", "ai_tech", "all", nil)
+	t3, _ := gen.GenerateTopicContent(ctx, "Htmx 4.0", "article details", "ai_tech", "all", nil)
 
 	if t1.Hook == t2.Hook || t2.Hook == t3.Hook || t1.Hook == t3.Hook {
 		t.Errorf("Hooks must be distinct per topic! Got:\n1: %s\n2: %s\n3: %s", t1.Hook, t2.Hook, t3.Hook)

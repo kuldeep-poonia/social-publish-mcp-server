@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/adapters/youtube"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/persona"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scout"
 )
 
@@ -53,24 +54,26 @@ type MetadataOptimizationReport struct {
 
 // Service orchestrates metadata optimization and live platform updates.
 type Service struct {
-	db            *sql.DB
-	repo          *database.Repository
-	youtubeClient *youtube.Client
-	geminiKey     string
-	httpClient    scout.HTTPClient
+	db             *sql.DB
+	repo           *database.Repository
+	youtubeClient  *youtube.Client
+	geminiKey      string
+	httpClient     scout.HTTPClient
+	personaService *persona.Service
 }
 
 // NewService initializes a new Metadata Optimizer Service.
-func NewService(db *sql.DB, repo *database.Repository, ytClient *youtube.Client, geminiKey string, httpClient scout.HTTPClient) *Service {
+func NewService(db *sql.DB, repo *database.Repository, ytClient *youtube.Client, geminiKey string, httpClient scout.HTTPClient, personaService *persona.Service) *Service {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Service{
-		db:            db,
-		repo:          repo,
-		youtubeClient: ytClient,
-		geminiKey:     strings.TrimSpace(geminiKey),
-		httpClient:    httpClient,
+		db:             db,
+		repo:           repo,
+		youtubeClient:  ytClient,
+		geminiKey:      strings.TrimSpace(geminiKey),
+		httpClient:     httpClient,
+		personaService: personaService,
 	}
 }
 
@@ -108,8 +111,16 @@ func (s *Service) UpdatePostMetadata(ctx context.Context, req *UpdateMetadataReq
 		}
 	}
 
+	var activePersona *persona.BrandPersona
+	if s.personaService != nil && req.UserID != "" {
+		activePersona, _ = s.personaService.GetBrandPersona(ctx, req.UserID)
+	}
+	if activePersona == nil && s.personaService != nil {
+		activePersona = s.personaService.DefaultPersona(req.UserID)
+	}
+
 	// 2. Perform AI / Algorithmic CTR Optimization
-	optResult := s.synthesizeOptimizedMetadata(ctx, req, previousTitle, previousDesc, existingTags)
+	optResult := s.synthesizeOptimizedMetadata(ctx, req, previousTitle, previousDesc, existingTags, activePersona)
 
 	report := &MetadataOptimizationReport{
 		PostID:                req.PostID,
@@ -199,7 +210,7 @@ type aiOptimizationOutput struct {
 	PredictedImpact string
 }
 
-func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMetadataRequest, prevTitle, prevDesc string, prevTags []string) *aiOptimizationOutput {
+func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMetadataRequest, prevTitle, prevDesc string, prevTags []string, p *persona.BrandPersona) *aiOptimizationOutput {
 	baseTitle := req.CustomTitle
 	if baseTitle == "" {
 		baseTitle = prevTitle
@@ -230,7 +241,7 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 
 	// Try live Gemini API if key is present
 	if s.geminiKey != "" {
-		res, err := s.callGeminiOptimization(ctx, req, baseTitle, baseDesc)
+		res, err := s.callGeminiOptimization(ctx, req, baseTitle, baseDesc, p)
 		if err == nil && res != nil && res.PrimaryTitle != "" {
 			return res
 		}
@@ -242,11 +253,20 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 		cleanSubject = "Modern Workflow"
 	}
 
-	// 3 Distinct High-Converting Angles (Natural phrasing, zero double-year repetition)
-	variations := []string{
-		fmt.Sprintf("Why %s is the Future of Tech (Complete Breakdown)", cleanSubject),
-		fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
-		fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
+	// 3 Distinct High-Converting Angles (Adapted to Brand Persona Tone)
+	var variations []string
+	if p != nil && p.Tone != "" {
+		variations = []string{
+			persona.FormatHookWithTone(p.Tone, cleanSubject, req.Niche),
+			fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
+			fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
+		}
+	} else {
+		variations = []string{
+			fmt.Sprintf("Why %s is the Future of Tech (Complete Breakdown)", cleanSubject),
+			fmt.Sprintf("The Truth About %s Nobody is Talking About", cleanSubject),
+			fmt.Sprintf("Mastering %s: Everything You Need to Know", cleanSubject),
+		}
 	}
 
 	primaryTitle := variations[0]
@@ -310,6 +330,11 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 		optimizedDesc = req.CustomDescription
 	}
 
+	if p != nil && len(p.ForbiddenWords) > 0 {
+		primaryTitle = persona.FilterForbiddenWords(primaryTitle, p.ForbiddenWords)
+		optimizedDesc = persona.FilterForbiddenWords(optimizedDesc, p.ForbiddenWords)
+	}
+
 	return &aiOptimizationOutput{
 		PrimaryTitle:    primaryTitle,
 		TitleVariations: variations,
@@ -319,9 +344,13 @@ func (s *Service) synthesizeOptimizedMetadata(ctx context.Context, req *UpdateMe
 	}
 }
 
-func (s *Service) callGeminiOptimization(ctx context.Context, req *UpdateMetadataRequest, title, desc string) (*aiOptimizationOutput, error) {
+func (s *Service) callGeminiOptimization(ctx context.Context, req *UpdateMetadataRequest, title, desc string, p *persona.BrandPersona) (*aiOptimizationOutput, error) {
+	personaRules := persona.BuildPromptInstructions(p)
+
 	prompt := fmt.Sprintf(`You are a world-class YouTube & Social Media CTR Optimization specialist.
-Optimize this post metadata for maximum Click-Through Rate (CTR), search discovery, and audience retention.
+%s
+
+Optimize this post metadata for maximum Click-Through Rate (CTR), search discovery, and audience retention matching the required brand persona.
 
 Current Title: %s
 Current Description: %s
@@ -332,16 +361,16 @@ Target Audience: %s
 
 Respond with raw JSON matching this exact structure (do NOT use markdown fences or code blocks):
 {
-  "primary_title": "Best high-CTR title under 90 chars using curiosity gap or value hook (fresh rewrite, no repetitive templates)",
+  "primary_title": "Best high-CTR title under 90 chars using curiosity gap or value hook in brand voice (fresh rewrite, no repetitive templates)",
   "title_variations": [
-    "Angle 1: Curiosity / Open Loop title",
-    "Angle 2: Contrarian / Critical perspective title",
-    "Angle 3: Step-by-step Value / Case study title"
+    "Angle 1: Curiosity / Open Loop title in brand voice",
+    "Angle 2: Contrarian / Critical perspective title in brand voice",
+    "Angle 3: Step-by-step Value / Case study title in brand voice"
   ],
   "description": "Structured high-retention description with timestamps, key takeaway bullets, and calls to action",
   "tags": ["Keyword1", "Keyword2", "Keyword3", "Keyword4", "Keyword5"],
   "predicted_impact": "Optimization Strategy: Qualitative rationale for the changes without inventing fake percentage statistics"
-}`, title, desc, req.Platform, req.Objective, req.Niche, req.TargetAudience)
+}`, personaRules, title, desc, req.Platform, req.Objective, req.Niche, req.TargetAudience)
 
 	reqPayload := map[string]interface{}{
 		"contents": []map[string]interface{}{

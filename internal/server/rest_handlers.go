@@ -351,6 +351,59 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 					},
 				},
 			},
+			"/api/v1/persona": map[string]interface{}{
+				"get": map[string]interface{}{
+					"operationId": "getBrandPersona",
+					"summary":     "Get active brand persona",
+					"description": "Retrieves the currently locked tone, voice rules, visual aesthetic, and forbidden buzzwords for content generation.",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Active brand persona configuration"},
+					},
+				},
+				"post": map[string]interface{}{
+					"operationId": "setBrandPersona",
+					"summary":     "Lock brand persona and aesthetic",
+					"description": "Configures brand personality, tone of voice, visual aesthetic, color palette, and prohibited words.",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"brand_name": map[string]interface{}{
+											"type": "string",
+										},
+										"tone": map[string]interface{}{
+											"type": "string",
+											"enum": []string{"sarcastic", "witty", "authoritative", "casual_chill", "bold_provocative", "academic", "inspirational"},
+										},
+										"visual_style": map[string]interface{}{
+											"type": "string",
+										},
+										"color_palette": map[string]interface{}{
+											"type": "string",
+										},
+										"voice_guidelines": map[string]interface{}{
+											"type": "string",
+										},
+										"forbidden_words": map[string]interface{}{
+											"type":  "array",
+											"items": map[string]string{"type": "string"},
+										},
+										"target_audience": map[string]interface{}{
+											"type": "string",
+										},
+									},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Brand persona locked successfully"},
+					},
+				},
+			},
 			"/api/v1/connect": map[string]interface{}{
 				"get": map[string]interface{}{
 					"operationId": "connectPlatform",
@@ -896,4 +949,68 @@ func (s *HTTPServer) handleRESTPostRouting(w http.ResponseWriter, r *http.Reques
 	}
 
 	http.Error(w, "Not Found", http.StatusNotFound)
+}
+
+func (s *HTTPServer) handleRESTPersona(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+		paramsJSON, _ := json.Marshal(map[string]interface{}{
+			"name":      "get_brand_persona",
+			"arguments": map[string]interface{}{},
+		})
+		callReq.Params = paramsJSON
+
+		reqBytes, _ := json.Marshal(callReq)
+		resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+		if resp != nil && resp.Error != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp.Error)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp.Result)
+
+	case http.MethodPost, http.MethodPut:
+		var reqBody map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil && err != io.EOF {
+			http.Error(w, fmt.Sprintf("Invalid JSON payload: %v", err), http.StatusBadRequest)
+			return
+		}
+		if reqBody == nil {
+			reqBody = make(map[string]interface{})
+		}
+
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+		paramsJSON, _ := json.Marshal(map[string]interface{}{
+			"name":      "set_brand_persona",
+			"arguments": reqBody,
+		})
+		callReq.Params = paramsJSON
+
+		reqBytes, _ := json.Marshal(callReq)
+		resp := s.mcpServer.HandleRequest(r.Context(), reqBytes)
+
+		if resp != nil && resp.Error != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp.Error)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp.Result)
+
+	default:
+		http.Error(w, "Method Not Allowed, use GET or POST", http.StatusMethodNotAllowed)
+	}
 }

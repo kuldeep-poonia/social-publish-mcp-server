@@ -19,7 +19,7 @@ import (
 )
 
 func TestOptimizer_CTRVariationsAndSanitization(t *testing.T) {
-	svc := NewService(nil, nil, nil, "", nil)
+	svc := NewService(nil, nil, nil, "", nil, nil)
 
 	req := &UpdateMetadataRequest{
 		PostID:         "yt_test_123",
@@ -66,7 +66,7 @@ func TestOptimizer_CTRVariationsAndSanitization(t *testing.T) {
 }
 
 func TestOptimizer_NoUUIDInTitleWhenExtractingFromDBOrEmpty(t *testing.T) {
-	svc := NewService(nil, nil, nil, "", nil)
+	svc := NewService(nil, nil, nil, "", nil, nil)
 
 	testUUID := "34c9624f-22f5-4ffe-a12e-943687c577b2"
 	report, err := svc.UpdatePostMetadata(context.Background(), &UpdateMetadataRequest{
@@ -102,7 +102,7 @@ func TestOptimizer_DatabaseRecordUpdate(t *testing.T) {
 	testUserID := uuid.New().String()
 	testPostID := uuid.New().String()
 
-	svc := NewService(db, nil, nil, "", nil)
+	svc := NewService(db, nil, nil, "", nil, nil)
 
 	mock.ExpectExec(regexp.QuoteMeta("UPDATE posts SET content = $1, metadata = $2, updated_at = $3 WHERE id = $4 AND user_id = $5")).
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), testPostID, testUserID).
@@ -191,7 +191,7 @@ func TestOptimizer_YouTubeLiveUpdateFlow(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"encrypted_access_token", "encrypted_refresh_token", "token_expires_at", "scopes", "is_active"}).
 			AddRow(encAccess, encRefresh, time.Now().Add(time.Hour), models.StringArray{"https://www.googleapis.com/auth/youtube.upload"}, true))
 
-	svc := NewService(db, repo, ytClient, "", nil)
+	svc := NewService(db, repo, ytClient, "", nil, nil)
 
 	report, err := svc.UpdatePostMetadata(context.Background(), &UpdateMetadataRequest{
 		UserID:         testUserID,

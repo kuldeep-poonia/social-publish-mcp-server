@@ -22,6 +22,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/mcp"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/optimizer"
+	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/persona"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/queue"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/ratelimit"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/scheduler"
@@ -51,6 +52,7 @@ type HTTPServer struct {
 	schedulerService    *scheduler.Service
 	scoutService        *scout.Service
 	optimizerService    *optimizer.Service
+	personaService      *persona.Service
 	redisClient         *redis.Client
 	streamQueue         *queue.RedisStreamQueue
 	workerPool          *queue.WorkerPool
@@ -146,9 +148,10 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		schedulerService.StartWorker(context.Background(), 30*time.Second)
 	}
 
+	personaService := persona.NewService(db)
 	geminiGen := scout.NewGeminiClient(cfg.GeminiAPIKey, nil)
-	scoutService := scout.NewService(db, repo, nil, nil, geminiGen)
-	optimizerService := optimizer.NewService(db, repo, youtubeClient, cfg.GeminiAPIKey, nil)
+	scoutService := scout.NewService(db, repo, nil, nil, geminiGen, personaService)
+	optimizerService := optimizer.NewService(db, repo, youtubeClient, cfg.GeminiAPIKey, nil, personaService)
 
 	s := &HTTPServer{
 		oauthServer:         oauthServer,
@@ -168,6 +171,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		schedulerService:    schedulerService,
 		scoutService:        scoutService,
 		optimizerService:    optimizerService,
+		personaService:      personaService,
 		redisClient:         rdb,
 		streamQueue:         streamQueue,
 		dlqManager:          dlqManager,
@@ -266,6 +270,9 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	// Post Metadata & CTR Optimization
 	mux.HandleFunc("/api/v1/posts/metadata", s.authMiddleware(s.handleRESTUpdateMetadata))
 	mux.HandleFunc("/api/v1/posts/", s.authMiddleware(s.handleRESTPostRouting))
+
+	// Brand Persona & Voice Lock
+	mux.HandleFunc("/api/v1/persona", s.authMiddleware(s.handleRESTPersona))
 
 	// Wrap root with Telemetry, CORS, and Rate Limiting
 	handler := s.telemetryMiddleware(s.rateLimitMiddleware(s.corsMiddleware(mux)))
