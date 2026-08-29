@@ -304,7 +304,10 @@ func isRedirectURIAllowed(target string, allowedList []string) bool {
 	if cleanTarget == "" {
 		return false
 	}
-	if strings.HasPrefix(cleanTarget, "https://claude.ai") || strings.HasPrefix(cleanTarget, "claude://") || strings.HasPrefix(cleanTarget, "http://localhost") || strings.HasPrefix(cleanTarget, "http://127.0.0.1") || strings.HasPrefix(cleanTarget, "https://social-mcp.duckdns.org") {
+	if strings.HasPrefix(cleanTarget, "https://claude.ai") || strings.HasPrefix(cleanTarget, "claude://") ||
+		strings.HasPrefix(cleanTarget, "cursor://") || strings.HasPrefix(cleanTarget, "vscode://") ||
+		strings.HasPrefix(cleanTarget, "http://localhost") || strings.HasPrefix(cleanTarget, "http://127.0.0.1") ||
+		strings.HasPrefix(cleanTarget, "https://social-mcp.duckdns.org") {
 		return true
 	}
 	for _, allowed := range allowedList {

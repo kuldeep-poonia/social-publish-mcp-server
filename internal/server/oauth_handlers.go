@@ -29,6 +29,15 @@ type twitterOAuthState struct {
 }
 
 func (s *HTTPServer) handleOAuthMetadata(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Accept")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	baseURL := s.getBaseURL(r)
 	log.Printf("[OAuth Discovery] Metadata requested: Host=%s, Path=%s, IP=%s", r.Host, r.URL.Path, extractClientIP(r))
 
@@ -60,6 +69,15 @@ type dynamicClientRegisterRequest struct {
 }
 
 func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Accept")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		log.Printf("[OAuth Register] REJECTED: Invalid method=%s", r.Method)
 		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
@@ -75,6 +93,7 @@ func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request)
 			"https://claude.ai/api/mcp/auth_callback",
 			"https://claude.ai/oauth/callback",
 			"claude://oauth/callback",
+			"cursor://oauth/callback",
 			"*",
 		}
 	}
@@ -86,7 +105,7 @@ func (s *HTTPServer) handleOAuthRegister(w http.ResponseWriter, r *http.Request)
 
 	name := req.ClientName
 	if name == "" {
-		name = "Claude MCP Dynamic Client"
+		name = "Dynamic MCP Client"
 	}
 
 	_ = s.oauthServer.RegisterClient(clientID, clientSecret, name, req.RedirectURIs)

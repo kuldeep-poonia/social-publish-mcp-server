@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,11 +15,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// SessionStore coordinates persistent storage (e.g. in Redis) for active MCP sessions.
+type SessionStore interface {
+	SetSession(ctx context.Context, sessionID, userID, clientID string, ttl time.Duration) error
+	GetSession(ctx context.Context, sessionID string) (userID string, exists bool, err error)
+	DeleteSession(ctx context.Context, sessionID string) error
+}
+
 // HTTPTransport coordinates HTTP/SSE client connections to the MCP Server.
 type HTTPTransport struct {
-	server     *Server
-	sessionsMu sync.RWMutex
-	sessions   map[string]chan *JSONRPCResponse
+	server       *Server
+	sessionsMu   sync.RWMutex
+	sessions     map[string]chan *JSONRPCResponse
+	sessionStore SessionStore
 }
 
 // NewHTTPTransport initializes an HTTP transport wrapping the core MCP server.
@@ -27,6 +36,123 @@ func NewHTTPTransport(server *Server) *HTTPTransport {
 		server:   server,
 		sessions: make(map[string]chan *JSONRPCResponse),
 	}
+}
+
+// SetSessionStore attaches a persistent session store (e.g., Redis) to the transport.
+func (t *HTTPTransport) SetSessionStore(store SessionStore) {
+	t.sessionsMu.Lock()
+	defer t.sessionsMu.Unlock()
+	t.sessionStore = store
+}
+
+// HandleStreamableHTTP is the primary single-endpoint Streamable HTTP MCP transport handler (POST /mcp).
+// It supports session tracking via Mcp-Session-Id, bidirectional JSON-RPC execution, and streaming responses.
+func (t *HTTPTransport) HandleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Accept, X-Requested-With, X-Client-ID")
+	w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Session ID management per MCP Streamable HTTP specification
+	sessionID := strings.TrimSpace(r.Header.Get("Mcp-Session-Id"))
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(r.URL.Query().Get("sessionId"))
+	}
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	// Persist session metadata in Redis / session store
+	t.sessionsMu.RLock()
+	store := t.sessionStore
+	t.sessionsMu.RUnlock()
+	if store != nil {
+		_ = store.SetSession(r.Context(), sessionID, "authenticated_user", r.Header.Get("X-Client-ID"), 24*time.Hour)
+	}
+
+	w.Header().Set("Mcp-Session-Id", sessionID)
+
+	// DELETE /mcp terminates an active session
+	if r.Method == http.MethodDelete {
+		if store != nil {
+			_ = store.DeleteSession(r.Context(), sessionID)
+		}
+		log.Printf("[MCP Streamable HTTP] SESSION TERMINATED: session_id=%s, RemoteAddr=%s", sessionID, r.RemoteAddr)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// GET /mcp with Accept: text/event-stream initiates an SSE stream
+	if r.Method == http.MethodGet {
+		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			t.HandleSSE(w, r)
+			return
+		}
+		http.Error(w, "Method Not Allowed, use POST for Streamable HTTP JSON-RPC", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		log.Printf("[MCP Streamable HTTP] REJECTED: Method not allowed: %s", r.Method)
+		http.Error(w, "Method Not Allowed, use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[MCP Streamable HTTP] REJECTED: Failed reading body: %v", err)
+		http.Error(w, "Failed reading request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if len(body) == 0 {
+		log.Printf("[MCP Streamable HTTP] REJECTED: Empty request body")
+		http.Error(w, "Empty request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[MCP Streamable HTTP] INCOMING: session_id=%s, Body=%s, RemoteAddr=%s", sessionID, string(body), r.RemoteAddr)
+
+	ctx := r.Context()
+	resp := t.server.HandleRequest(ctx, body)
+
+	// If request was a notification (no response needed per JSON-RPC 2.0), return 202 Accepted
+	if resp == nil {
+		log.Printf("[MCP Streamable HTTP] NOTIFICATION PROCESSED: session_id=%s -> 202 Accepted", sessionID)
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		return
+	}
+
+	// If client specifically requested SSE event stream for this tool call
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+
+		data, err := json.Marshal(resp)
+		if err == nil {
+			fmt.Fprintf(w, "event: message\ndata: %s\n\n", string(data))
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
+		log.Printf("[MCP Streamable HTTP] STREAMED EVENT: session_id=%s, RespID=%v", sessionID, resp.ID)
+		return
+	}
+
+	// Standard synchronous JSON-RPC 2.0 Response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+	log.Printf("[MCP Streamable HTTP] RESPONDED: session_id=%s, RespID=%v", sessionID, resp.ID)
 }
 
 // HandleDirectRPC processes standard non-streaming JSON-RPC 2.0 POST requests.

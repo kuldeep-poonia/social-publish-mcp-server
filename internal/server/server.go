@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -191,6 +192,10 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 		s.workerPool.Start(context.Background())
 	}
 
+	if rdb != nil {
+		transport.SetSessionStore(&redisSessionStore{client: rdb})
+	}
+
 	s.registerMCPToolHandlers()
 
 	mux := http.NewServeMux()
@@ -240,7 +245,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	// Meta Webhook Endpoint (HMAC-SHA256 signature verified)
 	mux.HandleFunc("/webhooks/instagram", s.handleInstagramWebhook)
 
-	// MCP Protocol Endpoints
+	// MCP Protocol Endpoints (Streamable HTTP + Legacy Parallel SSE with 12-Month Migration Window)
+	mux.HandleFunc("/mcp", s.authMiddleware(transport.HandleStreamableHTTP))
 	mux.HandleFunc("/mcp/rpc", s.authMiddleware(transport.HandleDirectRPC))
 	mux.HandleFunc("/mcp/sse", s.authMiddleware(transport.HandleSSE))
 	mux.HandleFunc("/mcp/messages", s.authMiddleware(transport.HandleMessages))
@@ -287,6 +293,11 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	}
 
 	return s
+}
+
+// Handler returns the underlying configured http.Handler for testing or routing.
+func (s *HTTPServer) Handler() http.Handler {
+	return s.server.Handler
 }
 
 // Start runs the HTTP server.
@@ -398,8 +409,9 @@ func (s *HTTPServer) corsMiddleware(next http.Handler) http.Handler {
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Accept, X-Requested-With, X-Client-ID")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
 		}
 
 		if r.Method == http.MethodOptions {
@@ -489,6 +501,50 @@ func (s *HTTPServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r.WithContext(ctx))
 	}
+}
+
+type redisSessionStore struct {
+	client *redis.Client
+}
+
+func (r *redisSessionStore) SetSession(ctx context.Context, sessionID, userID, clientID string, ttl time.Duration) error {
+	if r.client == nil {
+		return nil
+	}
+	key := fmt.Sprintf("mcp:session:%s", sessionID)
+	data, _ := json.Marshal(map[string]interface{}{
+		"session_id":     sessionID,
+		"user_id":        userID,
+		"client_id":      clientID,
+		"last_active_at": time.Now().UTC().Format(time.RFC3339),
+	})
+	return r.client.Set(ctx, key, string(data), ttl).Err()
+}
+
+func (r *redisSessionStore) GetSession(ctx context.Context, sessionID string) (string, bool, error) {
+	if r.client == nil {
+		return "", false, nil
+	}
+	key := fmt.Sprintf("mcp:session:%s", sessionID)
+	val, err := r.client.Get(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	var sess map[string]interface{}
+	_ = json.Unmarshal([]byte(val), &sess)
+	uid, _ := sess["user_id"].(string)
+	return uid, true, nil
+}
+
+func (r *redisSessionStore) DeleteSession(ctx context.Context, sessionID string) error {
+	if r.client == nil {
+		return nil
+	}
+	key := fmt.Sprintf("mcp:session:%s", sessionID)
+	return r.client.Del(ctx, key).Err()
 }
 
 func extractClientIP(r *http.Request) string {
