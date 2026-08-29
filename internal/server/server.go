@@ -96,6 +96,7 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mcpServer := mcp.NewServer()
 	transport := mcp.NewHTTPTransport(mcpServer)
+	transport.SetPublicBaseURL(cfg.PublicBaseURL)
 
 	var rdb *redis.Client
 	if cfg.RedisURL != "" {

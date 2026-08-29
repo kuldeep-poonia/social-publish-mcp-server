@@ -24,10 +24,11 @@ type SessionStore interface {
 
 // HTTPTransport coordinates HTTP/SSE client connections to the MCP Server.
 type HTTPTransport struct {
-	server       *Server
-	sessionsMu   sync.RWMutex
-	sessions     map[string]chan *JSONRPCResponse
-	sessionStore SessionStore
+	server        *Server
+	sessionsMu    sync.RWMutex
+	sessions      map[string]chan *JSONRPCResponse
+	sessionStore  SessionStore
+	publicBaseURL string
 }
 
 // NewHTTPTransport initializes an HTTP transport wrapping the core MCP server.
@@ -36,6 +37,13 @@ func NewHTTPTransport(server *Server) *HTTPTransport {
 		server:   server,
 		sessions: make(map[string]chan *JSONRPCResponse),
 	}
+}
+
+// SetPublicBaseURL configures the public canonical base URL (e.g. https://social-mcp.duckdns.org).
+func (t *HTTPTransport) SetPublicBaseURL(baseURL string) {
+	t.sessionsMu.Lock()
+	defer t.sessionsMu.Unlock()
+	t.publicBaseURL = strings.TrimRight(baseURL, "/")
 }
 
 // SetSessionStore attaches a persistent session store (e.g., Redis) to the transport.
@@ -228,17 +236,24 @@ func (t *HTTPTransport) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Determine absolute endpoint URL
-	scheme := "https"
-	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" && !strings.Contains(r.Host, "duckdns.org") && !strings.Contains(r.Host, "onrender.com") && !strings.Contains(r.Host, ".org") && !strings.Contains(r.Host, ".com") {
-		scheme = "http"
-	}
-	host := r.Host
-	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
-		host = xfh
-	}
-	endpointURI := fmt.Sprintf("%s://%s/mcp/messages?sessionId=%s", scheme, host, sessionID)
+	t.sessionsMu.RLock()
+	baseURL := t.publicBaseURL
+	t.sessionsMu.RUnlock()
 
-	log.Printf("[MCP SSE] STREAM CONNECTED: session_id=%s, Host=%s, EndpointURI=%s, RemoteAddr=%s", sessionID, host, endpointURI, r.RemoteAddr)
+	if baseURL == "" {
+		scheme := "https"
+		if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" && !strings.Contains(r.Host, "duckdns.org") && !strings.Contains(r.Host, "onrender.com") && !strings.Contains(r.Host, ".org") && !strings.Contains(r.Host, ".com") {
+			scheme = "http"
+		}
+		host := r.Host
+		if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+			host = xfh
+		}
+		baseURL = fmt.Sprintf("%s://%s", scheme, host)
+	}
+	endpointURI := fmt.Sprintf("%s/mcp/messages?sessionId=%s", baseURL, sessionID)
+
+	log.Printf("[MCP SSE] STREAM CONNECTED: session_id=%s, BaseURL=%s, EndpointURI=%s, RemoteAddr=%s", sessionID, baseURL, endpointURI, r.RemoteAddr)
 
 	// Send endpoint event with session URI per MCP spec
 	fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", endpointURI)
