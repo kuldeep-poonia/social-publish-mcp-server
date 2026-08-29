@@ -257,7 +257,9 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/openapi.json", s.handleOpenAPI)
 	mux.HandleFunc("/openapi.yaml", s.handleOpenAPI)
 	mux.HandleFunc("/privacy", s.handlePrivacy)
+	mux.HandleFunc("/privacy/", s.handlePrivacy)
 	mux.HandleFunc("/terms", s.handleTerms)
+	mux.HandleFunc("/terms/", s.handleTerms)
 
 	// REST API v1 Endpoints (Direct integration for ChatGPT Actions, Postman, Webhooks)
 	mux.HandleFunc("/api/v1/publish", s.authMiddleware(s.handleRESTPublish))

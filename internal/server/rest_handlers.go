@@ -454,32 +454,353 @@ func (s *HTTPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPServer) handlePrivacy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
-<html>
-<head><title>Privacy Policy - Social Publisher MCP</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333;">
-  <h1>Privacy Policy</h1>
-  <p><strong>Effective Date:</strong> January 1, 2026</p>
-  <p>Social Publisher MCP Server ("the Service") allows users to publish content, view analytics, and optimize social media workflows across Instagram, YouTube, and Twitter/X.</p>
-  <h2>Data Security & Encryption</h2>
-  <p>We do not store passwords or plaintext access credentials. All platform access and refresh tokens are encrypted at rest using industry-standard AES-256-GCM encryption in an isolated vault.</p>
-  <h2>Data Sharing</h2>
-  <p>Your data is used solely to execute user-initiated publishing and analytics actions. We never sell, rent, or distribute personal data to third parties.</p>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Social Publishing & Analytics MCP Server</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.15);
+      --accent: #818cf8;
+      --success: #34d399;
+      --warning: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 880px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 32px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--primary-glow);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-bottom: 12px;
+    }
+    h1 { font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 8px; letter-spacing: -0.02em; }
+    .meta { font-size: 0.9rem; color: var(--text-muted); }
+    h2 { font-size: 1.35rem; font-weight: 700; color: var(--primary); margin: 32px 0 12px; border-left: 4px solid var(--primary); padding-left: 12px; }
+    p, li { color: #cbd5e1; font-size: 1rem; margin-bottom: 14px; }
+    ul { padding-left: 24px; margin-bottom: 18px; }
+    li { margin-bottom: 8px; }
+    strong { color: #fff; font-weight: 600; }
+    .callout {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .callout-title { font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+    .table-wrapper { overflow-x: auto; margin: 20px 0; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+    th, td { padding: 12px 16px; border: 1px solid var(--border); }
+    th { background: rgba(15, 23, 42, 0.6); color: var(--primary); font-weight: 600; }
+    td { background: rgba(30, 41, 59, 0.5); }
+    a { color: var(--primary); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #7dd3fc; text-decoration: underline; }
+    .footer {
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+      padding-top: 24px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="badge">Privacy Policy & Data Protection</span>
+      <h1>Privacy Policy</h1>
+      <div class="meta">
+        <strong>Application:</strong> Social Publishing & Analytics MCP Server &bull; 
+        <strong>Effective Date:</strong> August 2026 &bull; 
+        <strong>Contact:</strong> <a href="mailto:kuldeeppoonia20298@gmail.com">kuldeeppoonia20298@gmail.com</a>
+      </div>
+    </div>
+
+    <h2>1. Introduction & Purpose</h2>
+    <p>The <strong>Social Publishing & Analytics MCP Server</strong> ("we", "our", or "the Service") provides an open-standard Model Context Protocol (MCP) server enabling users and authorized AI assistant clients (such as Claude Desktop, Cursor, and ChatGPT) to publish multimedia posts, schedule queues, optimize post metadata, and analyze engagement metrics across <strong>Twitter/X</strong>, <strong>Instagram (Meta)</strong>, and <strong>YouTube (Google)</strong>.</p>
+    <p>We are firmly committed to user privacy. This policy details how our system collects, encrypts, processes, and protects your data.</p>
+
+    <h2>2. Data We Collect & Process</h2>
+    <p>We collect only the technical data strictly necessary to execute your requested social media actions:</p>
+    <ul>
+      <li><strong>OAuth Credentials:</strong> Platform User IDs (Twitter user ID, YouTube channel ID, Instagram business ID) and OAuth 2.0 / 2.1 access and refresh tokens granted during account authorization.</li>
+      <li><strong>Post Content & Metadata:</strong> Text, captions, hashtags, video titles, descriptions, and media URLs provided for publishing or scheduling.</li>
+      <li><strong>Brand Persona Guidelines:</strong> User-defined brand voice, tone parameters, visual aesthetic notes, and forbidden buzzwords.</li>
+      <li><strong>Engagement Metrics:</strong> Post-level impressions, likes, retweets, views, comments, and follower growth retrieved via official platform APIs.</li>
+      <li><strong>Security Telemetry:</strong> Anonymized request IPs and timestamps for rate limiting, DDoS defense, and security auditing.</li>
+    </ul>
+
+    <div class="callout">
+      <div class="callout-title">🔒 What We Do NOT Collect</div>
+      <p style="margin-bottom:0;">We <strong>never</strong> collect, access, or store personal account passwords, credit card or billing details, private Direct Messages (DMs), or unauthenticated browsing history.</p>
+    </div>
+
+    <h2>3. Cryptographic Storage & Security Vault</h2>
+    <p>We enforce industry-leading security practices across our entire infrastructure:</p>
+    <ul>
+      <li><strong>AES-256-GCM Token Encryption:</strong> All OAuth access and refresh tokens are encrypted at rest using <strong>AES-256-GCM</strong> authenticated encryption with unique per-token nonces. Plaintext tokens are never stored in databases.</li>
+      <li><strong>HTTPS & TLS 1.3 In-Transit:</strong> All API communication, OAuth handshakes, and MCP streaming connections occur exclusively over TLS 1.2+ / TLS 1.3 encrypted channels.</li>
+      <li><strong>Dual-Layer Secret Scrubbing:</strong> All logging, exception traces, and metrics streams pass through automated regex scrubbers to redact sensitive tokens (<code>[REDACTED]</code>).</li>
+    </ul>
+
+    <h2>4. Sub-Processors & Infrastructure</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Service / Sub-Processor</th>
+            <th>Role / Purpose</th>
+            <th>Security Standards</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Supabase (PostgreSQL)</strong></td>
+            <td>Persistent database for scheduled posts, personas, and encrypted token vault</td>
+            <td>SOC2 Type II, ISO 27001, AES-256 Encrypted Storage</td>
+          </tr>
+          <tr>
+            <td><strong>Upstash (Redis)</strong></td>
+            <td>Ephemeral MCP session management, distributed queue locks, and rate limits</td>
+            <td>TLS Encrypted Cache, Ephemeral In-Memory Store</td>
+          </tr>
+          <tr>
+            <td><strong>Google Gemini API</strong></td>
+            <td>AI content generation, viral hooks, CTR metadata & SEO tag generation</td>
+            <td>Google Cloud Enterprise AI Privacy & Security Terms</td>
+          </tr>
+          <tr>
+            <td><strong>Render</strong></td>
+            <td>Hardened cloud container runtime hosting the HTTP / MCP server</td>
+            <td>TLS 1.3 Termination, Isolated Linux Containers</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>5. How Google Gemini AI Is Used</h2>
+    <p>When you invoke AI tools (e.g. <code>scout_trending_topics</code>, <code>update_post_metadata</code>, or autonomous scheduling), content drafts and brand guidelines are processed via <strong>Google Gemini API</strong> (<code>models/gemini-2.5-flash</code>) to produce viral hooks, tailored captions, and SEO tags. Your private data is <strong>never used to train public foundation models</strong>.</p>
+
+    <h2>6. Zero Data Selling & Non-Monetization Commitment</h2>
+    <p>We strictly adhere to a <strong>zero-commercialization policy</strong>: We do <strong>NOT</strong> sell, rent, monetize, trade, or share your personal data, post content, or OAuth credentials with any third-party advertisers, data brokers, or marketing networks under any circumstances.</p>
+
+    <h2>7. User Control & Immediate Revocation</h2>
+    <p>You have full ownership of your accounts and can revoke access or delete stored data at any time:</p>
+    <ul>
+      <li><strong>Via the MCP Server:</strong> Use the <code>disconnect_platform</code> tool or send a <code>DELETE</code> request to <code>/auth/{platform}/disconnect</code> to delete your tokens immediately.</li>
+      <li><strong>Via Upstream Platform Settings:</strong>
+        <ul>
+          <li><a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account Permissions (YouTube)</a></li>
+          <li><a href="https://www.instagram.com/accounts/manage_access/" target="_blank" rel="noopener">Meta / Instagram Apps and Websites</a></li>
+          <li><a href="https://twitter.com/settings/connected_apps" target="_blank" rel="noopener">X (Twitter) Connected Apps</a></li>
+        </ul>
+      </li>
+    </ul>
+
+    <h2>8. Contact Information</h2>
+    <p>For any privacy inquiries, data deletion requests, or technical support, please contact:</p>
+    <p>
+      <strong>Developer & Maintainer:</strong> Kuldeep Poonia<br>
+      <strong>Direct Email:</strong> <a href="mailto:kuldeeppoonia20298@gmail.com">kuldeeppoonia20298@gmail.com</a><br>
+      <strong>GitHub Repository:</strong> <a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank" rel="noopener">github.com/kuldeep-poonia/social-publish-mcp-server</a>
+    </p>
+
+    <div class="footer">
+      &copy; 2026 Social Publishing & Analytics MCP Server. All rights reserved. &bull; <a href="/terms">Terms of Service</a>
+    </div>
+  </div>
 </body>
 </html>`))
 }
 
 func (s *HTTPServer) handleTerms(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
-<html>
-<head><title>Terms of Service - Social Publisher MCP</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333;">
-  <h1>Terms of Service</h1>
-  <p><strong>Effective Date:</strong> January 1, 2026</p>
-  <p>By using the Social Publisher MCP Server, you agree to comply with platform developer policies of Meta, Google YouTube, and X/Twitter.</p>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service - Social Publishing & Analytics MCP Server</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.15);
+      --accent: #818cf8;
+      --success: #34d399;
+      --warning: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 880px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 32px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--primary-glow);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-bottom: 12px;
+    }
+    h1 { font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 8px; letter-spacing: -0.02em; }
+    .meta { font-size: 0.9rem; color: var(--text-muted); }
+    h2 { font-size: 1.35rem; font-weight: 700; color: var(--primary); margin: 32px 0 12px; border-left: 4px solid var(--primary); padding-left: 12px; }
+    p, li { color: #cbd5e1; font-size: 1rem; margin-bottom: 14px; }
+    ul { padding-left: 24px; margin-bottom: 18px; }
+    li { margin-bottom: 8px; }
+    strong { color: #fff; font-weight: 600; }
+    .callout {
+      background: rgba(251, 191, 36, 0.08);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .callout-title { font-weight: 700; color: var(--warning); margin-bottom: 6px; }
+    a { color: var(--primary); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #7dd3fc; text-decoration: underline; }
+    .footer {
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+      padding-top: 24px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="badge">Legal Terms & Usage Agreement</span>
+      <h1>Terms of Service</h1>
+      <div class="meta">
+        <strong>Application:</strong> Social Publishing & Analytics MCP Server &bull; 
+        <strong>Effective Date:</strong> August 2026 &bull; 
+        <strong>Contact:</strong> <a href="mailto:kuldeeppoonia20298@gmail.com">kuldeeppoonia20298@gmail.com</a>
+      </div>
+    </div>
+
+    <h2>1. Acceptance of Terms</h2>
+    <p>By connecting to, accessing, or using the <strong>Social Publishing & Analytics MCP Server</strong> ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree with any part of these Terms, you must immediately disconnect your accounts and cease using the Service.</p>
+
+    <h2>2. Description of the Service</h2>
+    <p>The Service provides a Model Context Protocol (MCP) backend interface enabling authorized AI clients (including Claude Desktop, Cursor, ChatGPT, and custom LLM workflows) to:</p>
+    <ul>
+      <li>Connect social media accounts on <strong>Twitter/X</strong>, <strong>Instagram (Meta)</strong>, and <strong>YouTube (Google)</strong> via OAuth 2.0 / 2.1 PKCE.</li>
+      <li>Publish, schedule, and automate multimedia posts, Reels, YouTube Shorts/Videos, and Tweets.</li>
+      <li>Retrieve post engagement metrics, audience reach, and algorithmic account health insights.</li>
+      <li>Scout live trending discussions (Reddit, Hacker News) and optimize SEO / CTR metadata using Google Gemini AI.</li>
+      <li>Enforce Brand Persona voice, tone, and forbidden buzzword policies across generated copy.</li>
+    </ul>
+
+    <h2>3. User Responsibilities & AI Content Review</h2>
+    <div class="callout">
+      <div class="callout-title">⚠️ Mandatory AI Content Review Policy</div>
+      <p style="margin-bottom:0;">The Service leverages Artificial Intelligence (including <strong>Google Gemini API</strong>) for content drafting, hashtag generation, and autonomous scheduling. <strong>You are solely and fully responsible for reviewing, auditing, and approving all AI-generated content before or at publication time.</strong></p>
+    </div>
+    <p>You agree not to use the Service to publish content that:</p>
+    <ul>
+      <li>Violates applicable local, national, or international laws.</li>
+      <li>Contains hate speech, harassment, defamation, intellectual property infringement, malware, or deceptive spam.</li>
+      <li>Violates the terms, developer policies, or community guidelines of Twitter/X, YouTube/Google, or Meta/Instagram.</li>
+    </ul>
+
+    <h2>4. Platform Policy Compliance</h2>
+    <p>Your usage of this Service is conditioned upon strict compliance with third-party platform developer terms:</p>
+    <ul>
+      <li><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a> &amp; <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
+      <li><a href="https://developers.facebook.com/terms/" target="_blank" rel="noopener">Meta Platform Terms &amp; Instagram Community Guidelines</a></li>
+      <li><a href="https://developer.x.com/en/developer-terms/agreement-and-policy" target="_blank" rel="noopener">X (Twitter) Developer Agreement &amp; Developer Policy</a></li>
+    </ul>
+
+    <h2>5. Service Availability & Uptime Disclaimer</h2>
+    <p>The Service is provided on an <strong>"AS IS" and "AS AVAILABLE" basis</strong> without express or implied warranties of any kind. Infrastructure components may be hosted on cloud free-tier or shared hosting services (including Render, Supabase, and Upstash) that may experience occasional restarts, cold-starts, maintenance windows, or temporary downtime. We do not guarantee uninterrupted, error-free 100% uptime.</p>
+
+    <h2>6. Limitation of Liability</h2>
+    <p>To the maximum extent permitted by applicable law, the developers and maintainers of the Service shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data loss, API rate limit exhaustion, platform quota suspensions, or account restrictions/bans imposed by third-party social networks.</p>
+
+    <h2>7. Account Disconnection & Termination</h2>
+    <p>You may disconnect your social accounts and terminate access at any time via the <code>disconnect_platform</code> tool, the <code>/auth/{platform}/disconnect</code> endpoint, or via your Google, Meta, or Twitter account security settings. We reserve the right to revoke access to any client that abuses the Service or attempts to compromise server security.</p>
+
+    <h2>8. Governing Law & Jurisdiction</h2>
+    <p>These Terms shall be governed by, construed, and enforced in accordance with the <strong>laws of India</strong>, without regard to conflict of law principles. Any dispute arising out of or relating to these Terms shall be subject to the exclusive jurisdiction of the competent courts located in India.</p>
+
+    <h2>9. Contact Information</h2>
+    <p>If you have any questions, feedback, or legal notices concerning these Terms of Service, please contact:</p>
+    <p>
+      <strong>Developer & Maintainer:</strong> Kuldeep Poonia<br>
+      <strong>Direct Email:</strong> <a href="mailto:kuldeeppoonia20298@gmail.com">kuldeeppoonia20298@gmail.com</a><br>
+      <strong>GitHub Project:</strong> <a href="https://github.com/kuldeep-poonia/social-publish-mcp-server" target="_blank" rel="noopener">github.com/kuldeep-poonia/social-publish-mcp-server</a>
+    </p>
+
+    <div class="footer">
+      &copy; 2026 Social Publishing & Analytics MCP Server. All rights reserved. &bull; <a href="/privacy">Privacy Policy</a>
+    </div>
+  </div>
 </body>
 </html>`))
 }

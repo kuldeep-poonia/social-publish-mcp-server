@@ -3,92 +3,111 @@
 **Effective Date**: August 2026  
 **Last Updated**: August 2026  
 **Application**: Social Publishing & Analytics MCP Server  
+**Official Endpoint**: [https://social-mcp.duckdns.org/privacy](https://social-mcp.duckdns.org/privacy)  
+**Contact Email**: [kuldeeppoonia20298@gmail.com](mailto:kuldeeppoonia20298@gmail.com)
 
 ---
 
-## 1. Introduction & Overview
+## 1. Introduction & Scope
 
-The **Social Publishing & Analytics MCP Server** ("we", "our", or "the Service") provides an open standard Model Context Protocol (MCP) server enabling users and AI assistants to publish content and query engagement analytics on Twitter/X, YouTube, and Instagram.
+The **Social Publishing & Analytics MCP Server** ("we", "our", or "the Service") provides an open-standard Model Context Protocol (MCP) server that empowers users and authorized AI clients (such as Claude Desktop, Cursor, and ChatGPT) to publish multimedia content, manage scheduled queues, optimize metadata, and analyze engagement metrics across connected social platforms including **Twitter/X**, **Instagram (Meta)**, and **YouTube (Google)**.
 
-We respect your privacy. This Privacy Policy details what data we collect, how it is encrypted and processed, our strict retention standards, and your rights over your data.
+We are committed to user privacy and data security. This Privacy Policy discloses our data collection practices, encryption standards, third-party sub-processors, and user data rights.
 
 ---
 
-## 2. Information We Collect
+## 2. Information We Collect & Process
 
-We only collect the minimal technical data necessary to provide social publishing and analytics services under your explicit authorization:
+We collect only the minimum necessary data to perform authorized publishing, scheduling, and analytics actions on your behalf:
 
-1. **Account & Authentication Information**:
-   - Platform User ID (e.g. your Twitter user ID, YouTube channel ID, or Instagram business account ID).
-   - OAuth 2.0 / 2.1 Access Tokens and Refresh Tokens granted during your account connection.
-2. **Publishing Metadata**:
-   - Content text, media URLs, post titles, descriptions, and published post identifiers (`post_id`).
-3. **Engagement Telemetry**:
-   - Post-level metrics (impressions, likes, views, comments, shares, retweets) retrieved via official platform APIs.
-4. **Audit Logs**:
-   - Timestamps, action names (e.g. `publish_post`, `token_refresh`), and request IP addresses for security auditing.
+1. **OAuth Platform Authentication Credentials**:
+   - Platform-specific User / Channel IDs (Twitter User ID, YouTube Channel ID, Instagram Business Account ID).
+   - OAuth 2.0 / 2.1 Access Tokens and Refresh Tokens granted during authorization flows.
+2. **Publishing & Content Data**:
+   - Post text, captions, hashtags, video titles, descriptions, and media URLs provided for publishing or scheduling.
+   - Brand Persona guidelines (brand voice, tone, visual aesthetic, forbidden buzzwords) set by the user.
+3. **Analytics & Performance Telemetry**:
+   - Post-level and account-level metrics (impressions, reach, likes, comments, retweets, views, follower growth) retrieved strictly via official platform APIs.
+4. **Security Audit & Rate-Limiting Logs**:
+   - Timestamps, anonymized IP addresses, and request action identifiers for telemetry and DDoS protection.
 
 > [!IMPORTANT]
 > **We Do NOT Collect**:
-> - We never collect personal passwords, billing credentials, private direct messages (DMs), or unauthenticated browsing history.
+> - We **never** collect, access, or store personal account passwords, payment/credit card details, private direct messages (DMs), or unauthenticated browsing history.
 
 ---
 
-## 3. How Your Information Is Used
+## 3. Cryptographic Storage & Security Architecture
 
-Your information is used strictly to:
-- Execute content publishing actions requested by you through your AI assistant or client.
-- Fetch and aggregate engagement metrics for posts you publish.
-- Maintain valid OAuth sessions via token refresh flows.
-- Enforce rate limits and prevent abuse.
+We employ defense-in-depth cryptographic protections for all stored credentials and communications:
 
----
-
-## 4. Cryptographic Data Protection & Security
-
-We enforce rigorous, industry-standard cryptographic safeguards across all data at rest and in transit:
-
-- **AES-256-GCM Encryption at Rest**: All OAuth access tokens and refresh tokens are encrypted using **AES-256-GCM** authenticated encryption with unique per-token nonces.
-- **Out-of-Band Key Management**: Master encryption keys are managed independently in external secret managers and are never bundled with database backups.
-- **In-Transit Encryption**: All external API communications with Twitter, YouTube, and Meta occur over mandatory **TLS 1.2+** connections with modern AEAD cipher suites.
-- **Telemetry Secret Scrubbing**: All logging and telemetry streams pass through automated dual-layer secret scrubbers that mask all credentials (`[REDACTED]`).
+- **AES-256-GCM Token Encryption Vault**: All OAuth access tokens and refresh tokens are encrypted at rest using **AES-256-GCM** authenticated encryption with unique 96-bit per-record nonces. Plaintext tokens are never persisted in databases or written to disk.
+- **TLS 1.2+ / HTTPS In-Transit Protection**: All API traffic, OAuth exchanges, and MCP streaming connections are strictly encrypted over TLS with modern cipher suites.
+- **Dual-Layer Secret Scrubbing**: All internal logging, error traces, and metrics streams pass through automated regex scrubbers that redact credentials and private tokens (`[REDACTED]`).
 
 ---
 
-## 5. Zero Data Selling & Third-Party Sharing Statement
+## 4. Sub-Processors & Cloud Infrastructure
+
+Our infrastructure utilizes reputable enterprise cloud providers:
+
+| Sub-Processor | Purpose | Location | Security / Compliance |
+| :--- | :--- | :--- | :--- |
+| **Supabase (PostgreSQL)** | Persistent database for scheduled posts, personas, and encrypted token vault | US / Global | SOC2 Type II, ISO 27001, AES-256 Encrypted |
+| **Upstash (Redis)** | Ephemeral MCP session state, distributed locks, and rate limiting | US / Global | TLS Encrypted, Ephemeral Cache |
+| **Google Gemini API** | AI content generation, hook generation, CTR metadata optimization | Global | Google Cloud Enterprise Privacy Terms |
+| **Render** | Cloud container runtime hosting the MCP HTTP / SSE server | US / Global | TLS 1.3 Termination, Hardened Linux Containers |
+
+---
+
+## 5. How Google Gemini AI Is Used
+
+When you invoke AI tools (e.g. `scout_trending_topics`, `update_post_metadata`, `optimize_content_seo`, or autonomous scheduling):
+- Content prompts, topic keywords, and brand tone guidelines are processed via **Google Gemini API** (`models/gemini-2.5-flash`).
+- Gemini is used solely to generate creative drafts, viral hooks, SEO search tags, and hashtag suggestions.
+- Your data is **not used to train external public foundation models** without your explicit consent.
+
+---
+
+## 6. Zero Data Selling Commitment
 
 > [!CAUTION]
-> **Zero Data Selling Commitment**:
-> We do **NOT** sell, rent, monetize, trade, or share your personal data, post content, or OAuth credentials with any third-party advertisers, brokers, or external AI model trainers under any circumstances.
+> **Strict Non-Monetization Policy**:
+> We do **NOT** sell, rent, lease, monetize, or trade your personal data, post content, analytics history, or OAuth credentials with third-party advertisers, data brokers, or external AI model vendors under any circumstances.
 
-Data is only transmitted to:
-1. **The Target Social Platforms** (Twitter/X, Google/YouTube, Meta/Instagram) strictly as required to publish your posts or retrieve your analytics.
-2. **Your Chosen AI Client** (e.g., Claude Desktop, custom agent) via standard MCP protocol responses.
-
----
-
-## 6. Data Retention & Right to Erasure
-
-- **Active Connections**: OAuth credentials are retained only as long as your account remains connected to the MCP server.
-- **Right to Erasure (Immediate Deletion)**:
-  - You can immediately revoke access and delete your credentials at any time by calling the `disconnect_platform` tool or issuing a `DELETE` request to `/auth/{platform}/disconnect`.
-  - Upon disconnection, your stored OAuth tokens are permanently deleted from the vault and revoked with the upstream platform.
-- **Audit Logs**: Security audit logs are automatically purged after 30 days.
+Data is transmitted strictly to:
+1. **Target Social Networks** (Twitter/X, Google/YouTube, Meta/Instagram) exclusively to execute your authorized publishing or analytics requests.
+2. **Your Connected MCP Client** (Claude, Cursor, custom agents) over authenticated JSON-RPC sessions.
 
 ---
 
-## 7. Compliance with Platform Developer Policies
+## 7. User Control, Revocation & Data Erasure
 
-The Service operates in strict compliance with:
-- **Meta Platform Terms & Developer Policies**: Data is fetched solely through the official Instagram Graph API and used exclusively for your requested analytics.
-- **YouTube API Services Terms of Service**: Video uploads and quota usage adhere strictly to Google Developer Guidelines.
-- **X (Twitter) Developer Agreement & Policy**: Posts and media uploads adhere to X API terms.
+You maintain complete ownership and control over your accounts and data:
+
+- **Immediate Access Revocation**: You can disconnect your social platforms at any time via:
+  - The `disconnect_platform` MCP tool or `DELETE /auth/{platform}/disconnect` REST endpoint.
+  - Upstream provider settings:
+    - **Google Account Permissions**: [https://myaccount.google.com/permissions](https://myaccount.google.com/permissions)
+    - **Meta / Instagram Apps and Websites**: [https://www.instagram.com/accounts/manage_access/](https://www.instagram.com/accounts/manage_access/)
+    - **X (Twitter) Connected Apps**: [https://twitter.com/settings/connected_apps](https://twitter.com/settings/connected_apps)
+- **Data Erasure**: Upon account disconnection, all corresponding encrypted tokens and platform records are permanently deleted from our database.
 
 ---
 
-## 8. Contact Information
+## 8. Compliance with Platform Developer Policies
 
-If you have questions regarding this Privacy Policy or wish to exercise your data privacy rights, please contact:
+The Service operates in compliance with all relevant platform developer agreements:
+- **Meta Platform Terms & Instagram Graph API Policies**
+- **YouTube API Services Terms of Service & Google Developer Policies**
+- **X (Twitter) Developer Agreement & Developer Policy**
 
-- **Privacy & Security Team**: `privacy@socialmcp.io`
-- **GitHub Repository**: [https://github.com/kuldeep-poonia/social-publish-mcp-server](https://github.com/kuldeep-poonia/social-publish-mcp-server)
+---
+
+## 9. Contact Information
+
+If you have any questions, privacy inquiries, or data deletion requests, please reach out to:
+
+- **Maintainer & Lead Developer**: Kuldeep Poonia
+- **Direct Email**: [kuldeeppoonia20298@gmail.com](mailto:kuldeeppoonia20298@gmail.com)
+- **GitHub Project**: [https://github.com/kuldeep-poonia/social-publish-mcp-server](https://github.com/kuldeep-poonia/social-publish-mcp-server)
