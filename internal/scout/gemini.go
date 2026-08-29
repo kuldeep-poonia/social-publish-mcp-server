@@ -186,23 +186,26 @@ func (g *GeminiClient) semanticTopicGeneration(title, content, niche, targetPlat
 	// 3. Generate Topic-Specific Hashtags (derived directly from title words + niche)
 	var hashtags []string
 	seenTags := make(map[string]bool)
-	for _, kw := range subjectKeywords {
-		tag := "#" + capitalizeWord(kw)
-		if !seenTags[tag] && len(tag) > 2 {
-			hashtags = append(hashtags, tag)
-			seenTags[tag] = true
-		}
-	}
-	// Add relevant domain tags
+
+	// Add domain-specific primary tags first
 	switch {
 	case strings.Contains(lowerTitle, "keyboard") || strings.Contains(lowerTitle, "gui"):
 		addTags(&hashtags, seenTags, "#KeyboardDriven", "#DevUX", "#Productivity", "#Vim", "#Linux", "#UserInterface")
 	case strings.Contains(lowerTitle, "glm") || strings.Contains(lowerTitle, "weight") || strings.Contains(lowerTitle, "model"):
-		addTags(&hashtags, seenTags, "#OpenWeight", "#OpenSourceAI", "#MachineLearning", "#LLMs", "#AIResearch", "#HuggingFace")
+		addTags(&hashtags, seenTags, "#OpenWeight", "#GLM5", "#OpenSourceAI", "#MachineLearning", "#LLMs", "#AIResearch", "#HuggingFace")
 	case strings.Contains(lowerTitle, "htmx") || strings.Contains(lowerTitle, "web"):
 		addTags(&hashtags, seenTags, "#HTMX", "#WebDevelopment", "#Frontend", "#JavaScript", "#Backend", "#CleanCode")
 	default:
 		addTags(&hashtags, seenTags, "#TechNews", "#Innovation", "#Trending", "#Software")
+	}
+
+	for _, kw := range subjectKeywords {
+		tag := SanitizeHashtag(kw)
+		lowerTag := strings.ToLower(tag)
+		if tag != "" && !seenTags[lowerTag] && len(tag) > 3 && !isFragmentTag(lowerTag) {
+			hashtags = append(hashtags, tag)
+			seenTags[lowerTag] = true
+		}
 	}
 
 	// 4. Twitter / X Draft
@@ -245,12 +248,52 @@ func (g *GeminiClient) semanticTopicGeneration(title, content, niche, targetPlat
 	}
 }
 
+// SanitizeHashtag cleans raw text into platform-valid CamelCase hashtags without hyphens, dots, or spaces.
+func SanitizeHashtag(tag string) string {
+	tag = strings.TrimPrefix(tag, "#")
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return ""
+	}
+
+	// Split by hyphens, underscores, dots, or spaces
+	parts := strings.FieldsFunc(tag, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.' || r == ' ' || r == '/' || r == ':'
+	})
+
+	var result strings.Builder
+	for _, p := range parts {
+		cleaned := regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(p, "")
+		if len(cleaned) == 0 {
+			continue
+		}
+		result.WriteString(capitalizeWord(cleaned))
+	}
+
+	res := result.String()
+	if len(res) < 2 {
+		return ""
+	}
+	return "#" + res
+}
+
+func isFragmentTag(tag string) bool {
+	clean := strings.ToLower(strings.TrimPrefix(tag, "#"))
+	fragments := map[string]bool{
+		"fully": true, "guis": true, "should": true, "driven": true,
+		"just": true, "with": true, "here": true, "your": true,
+		"some": true, "more": true, "have": true, "been": true,
+	}
+	return fragments[clean]
+}
+
 func isStopWord(w string) bool {
 	stops := map[string]bool{
 		"the": true, "and": true, "for": true, "with": true, "that": true,
 		"this": true, "from": true, "are": true, "was": true, "were": true,
 		"should": true, "could": true, "would": true, "about": true, "now": true,
 		"out": true, "how": true, "why": true, "what": true, "when": true,
+		"fully": true, "been": true, "just": true,
 	}
 	return stops[w]
 }
@@ -264,9 +307,11 @@ func capitalizeWord(w string) string {
 
 func addTags(tags *[]string, seen map[string]bool, newTags ...string) {
 	for _, t := range newTags {
-		if !seen[t] {
-			*tags = append(*tags, t)
-			seen[t] = true
+		san := SanitizeHashtag(t)
+		lower := strings.ToLower(san)
+		if san != "" && !seen[lower] {
+			*tags = append(*tags, san)
+			seen[lower] = true
 		}
 	}
 }
