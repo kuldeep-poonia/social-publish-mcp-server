@@ -106,44 +106,63 @@ func (c *Client) ExtendLongLivedToken(ctx context.Context, currentToken string) 
 	return c.ExchangeLongLivedToken(ctx, currentToken)
 }
 
-// GetInstagramBusinessAccount discovers the linked Instagram Business/Creator Account from the user's Facebook Pages.
+// GetInstagramBusinessAccount discovers the linked Instagram Business/Creator Account from the user's Facebook Pages or direct /me.
 func (c *Client) GetInstagramBusinessAccount(ctx context.Context, userAccessToken string) (*InstagramBusinessAccount, string, error) {
+	// 1. Primary Discovery: Facebook Pages (/me/accounts)
 	endpoint := fmt.Sprintf("%s/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}&access_token=%s",
 		c.apiBase, url.QueryEscape(userAccessToken))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed creating page accounts request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed discovering Facebook pages: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", parseMetaAPIError(resp.StatusCode, body)
-	}
-
-	var pagesResp PageAccountsResponse
-	if err := json.Unmarshal(body, &pagesResp); err != nil {
-		return nil, "", fmt.Errorf("failed decoding Facebook pages response: %w", err)
-	}
-
-	if len(pagesResp.Data) == 0 {
-		return nil, "", fmt.Errorf("%w: user has no Facebook Pages connected", ErrPersonalAccountNotSupported)
-	}
-
-	// Find first page with linked Instagram Business Account
-	for _, page := range pagesResp.Data {
-		if page.InstagramBusinessAccount != nil && page.InstagramBusinessAccount.ID != "" {
-			return page.InstagramBusinessAccount, page.AccessToken, nil
+	if err == nil {
+		resp, doErr := c.httpClient.Do(req)
+		if doErr == nil {
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				var pagesResp PageAccountsResponse
+				if jErr := json.Unmarshal(body, &pagesResp); jErr == nil && len(pagesResp.Data) > 0 {
+					for _, page := range pagesResp.Data {
+						if page.InstagramBusinessAccount != nil && page.InstagramBusinessAccount.ID != "" {
+							pageAccessToken := page.AccessToken
+							if pageAccessToken == "" {
+								pageAccessToken = userAccessToken
+							}
+							return page.InstagramBusinessAccount, pageAccessToken, nil
+						}
+					}
+				}
+			}
 		}
 	}
 
-	return nil, "", fmt.Errorf("%w: connected Facebook Pages do not have an active Instagram Business or Creator Account linked", ErrPersonalAccountNotSupported)
+	// 2. Secondary Fallback: Direct Instagram Profile (/me)
+	directEndpoint := fmt.Sprintf("%s/me?fields=id,username,name,account_type&access_token=%s",
+		c.apiBase, url.QueryEscape(userAccessToken))
+	reqDirect, err := http.NewRequestWithContext(ctx, http.MethodGet, directEndpoint, nil)
+	if err == nil {
+		respDirect, doErr := c.httpClient.Do(reqDirect)
+		if doErr == nil {
+			defer respDirect.Body.Close()
+			body, _ := io.ReadAll(respDirect.Body)
+			if respDirect.StatusCode >= 200 && respDirect.StatusCode < 300 {
+				var directAccount struct {
+					ID          string `json:"id"`
+					Username    string `json:"username"`
+					Name        string `json:"name"`
+					AccountType string `json:"account_type"`
+				}
+				if jErr := json.Unmarshal(body, &directAccount); jErr == nil && directAccount.ID != "" {
+					return &InstagramBusinessAccount{
+						ID:       directAccount.ID,
+						Username: directAccount.Username,
+						Name:     directAccount.Name,
+					}, userAccessToken, nil
+				}
+			}
+		}
+	}
+
+	return nil, "", fmt.Errorf("%w: please verify in Meta/Instagram that your Instagram account is set to Professional (Creator or Business) and linked to a Facebook Page", ErrPersonalAccountNotSupported)
 }
 
 // CreateMediaContainer initializes a media container on Meta's servers (Step 1).

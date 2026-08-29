@@ -26,16 +26,18 @@ func (s *HTTPServer) isAuthOrExpiredError(err error) bool {
 	if err == nil {
 		return false
 	}
+	// Do NOT treat account type or Facebook Page linking errors as an expired auth loop
+	if errors.Is(err, instagram.ErrPersonalAccountNotSupported) || strings.Contains(strings.ToLower(err.Error()), "not an instagram business") {
+		return false
+	}
 	msg := strings.ToLower(err.Error())
 	return errors.Is(err, instagram.ErrPlatformNotConnected) ||
 		errors.Is(err, instagram.ErrReauthenticationRequired) ||
-		strings.Contains(msg, "expired") ||
-		strings.Contains(msg, "no active") ||
-		strings.Contains(msg, "unauthorized") ||
-		strings.Contains(msg, "reauthentication") ||
-		strings.Contains(msg, "not connected") ||
-		strings.Contains(msg, "connection not found") ||
-		strings.Contains(msg, "please connect")
+		errors.Is(err, database.ErrNotFound) ||
+		strings.Contains(msg, "token expired") ||
+		strings.Contains(msg, "re-authentication required") ||
+		strings.Contains(msg, "platform connection not found") ||
+		strings.Contains(msg, "credentials not found")
 }
 
 func (s *HTTPServer) makeAuthRequiredToolResult(platform, userID string, rawErr error) *mcp.CallToolResult {
