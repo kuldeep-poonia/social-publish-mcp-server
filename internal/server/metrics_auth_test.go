@@ -25,24 +25,24 @@ func TestServer_MetricsEndpointAuthentication(t *testing.T) {
 	ts := httptest.NewServer(httpServer.server.Handler)
 	defer ts.Close()
 
-	// 1. Unauthenticated request to /metrics -> 401 Unauthorized
-	respUnauth, err := http.Get(ts.URL + "/metrics")
+	// 1. Unauthenticated request to /metrics/prometheus -> 401 Unauthorized
+	respUnauth, err := http.Get(ts.URL + "/metrics/prometheus")
 	if err != nil {
-		t.Fatalf("GET /metrics failed: %v", err)
+		t.Fatalf("GET /metrics/prometheus failed: %v", err)
 	}
 	defer respUnauth.Body.Close()
 
-	t.Logf("Unauthenticated /metrics HTTP Status: %d", respUnauth.StatusCode)
+	t.Logf("Unauthenticated /metrics/prometheus HTTP Status: %d", respUnauth.StatusCode)
 	if respUnauth.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("SECURITY VIOLATION: expected 401 Unauthorized for unauthenticated /metrics, got %d", respUnauth.StatusCode)
+		t.Fatalf("SECURITY VIOLATION: expected 401 Unauthorized for unauthenticated /metrics/prometheus, got %d", respUnauth.StatusCode)
 	}
 
 	// 2. Request with invalid Bearer token -> 401 Unauthorized
-	reqInvalid, _ := http.NewRequest("GET", ts.URL+"/metrics", nil)
+	reqInvalid, _ := http.NewRequest("GET", ts.URL+"/metrics/prometheus", nil)
 	reqInvalid.Header.Set("Authorization", "Bearer invalid_bearer_token")
 	respInvalid, err := http.DefaultClient.Do(reqInvalid)
 	if err != nil {
-		t.Fatalf("GET /metrics with invalid token failed: %v", err)
+		t.Fatalf("GET /metrics/prometheus with invalid token failed: %v", err)
 	}
 	defer respInvalid.Body.Close()
 
@@ -51,16 +51,16 @@ func TestServer_MetricsEndpointAuthentication(t *testing.T) {
 	}
 
 	// 3. Authenticated request with valid Bearer token -> 200 OK + Prometheus text
-	reqAuth, _ := http.NewRequest("GET", ts.URL+"/metrics", nil)
+	reqAuth, _ := http.NewRequest("GET", ts.URL+"/metrics/prometheus", nil)
 	reqAuth.Header.Set("Authorization", "Bearer "+metricsSecret)
 	respAuth, err := http.DefaultClient.Do(reqAuth)
 	if err != nil {
-		t.Fatalf("authenticated GET /metrics failed: %v", err)
+		t.Fatalf("authenticated GET /metrics/prometheus failed: %v", err)
 	}
 	defer respAuth.Body.Close()
 
 	if respAuth.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK for authenticated /metrics, got %d", respAuth.StatusCode)
+		t.Fatalf("expected 200 OK for authenticated /metrics/prometheus, got %d", respAuth.StatusCode)
 	}
 
 	bodyBytes, _ := io.ReadAll(respAuth.Body)
