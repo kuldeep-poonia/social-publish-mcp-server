@@ -16,7 +16,7 @@ COPY . .
 
 # Compile stripped production binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-s -w -X main.version=1.0.0" \
+    -ldflags="-s -w -X main.version=1.0.0 -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo a4c74dc)" \
     -trimpath \
     -o /bin/social-mcp-server ./cmd/server
 
