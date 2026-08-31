@@ -104,15 +104,11 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	transport.SetPublicBaseURL(cfg.PublicBaseURL)
 
 	var rdb *redis.Client
-	if cfg.RedisURL != "" {
-		if opt, err := redis.ParseURL(cfg.RedisURL); err == nil {
-			rdb = redis.NewClient(opt)
-		}
-	} else if cfg.RedisHost != "" {
-		rdb = redis.NewClient(&redis.Options{
-			Addr:     cfg.RedisAddr(),
-			Password: cfg.RedisPassword,
-		})
+	if redisOpts, err := cfg.RedisOptions(); err != nil {
+		log.Printf("[Redis Init] ERROR constructing Redis options: %v", err)
+	} else if redisOpts != nil {
+		rdb = redis.NewClient(redisOpts)
+		log.Printf("[Redis Init] Initialized Redis client for Addr=%s (TLS=%t)", redisOpts.Addr, redisOpts.TLSConfig != nil)
 	}
 
 	var limiter ratelimit.Limiter = ratelimit.NewTokenBucketLimiter(100.0, 200.0)
