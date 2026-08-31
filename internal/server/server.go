@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +42,11 @@ type HTTPServer struct {
 	transport           *mcp.HTTPTransport
 	limiter             ratelimit.Limiter
 	cfg                 *config.Config
+	db                  *sql.DB
 	repo                *database.Repository
+	bootTime            time.Time
+	requestCount        atomic.Uint64
+	errorCount          atomic.Uint64
 	twitterService      *twitter.Service
 	twitterClient       *twitter.Client
 	youtubeService      *youtube.PublishService
@@ -156,6 +161,8 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	optimizerService := optimizer.NewService(db, repo, youtubeClient, cfg.GeminiAPIKey, nil, personaService)
 
 	s := &HTTPServer{
+		db:                  db,
+		bootTime:            time.Now().UTC(),
 		oauthServer:         oauthServer,
 		mcpServer:           mcpServer,
 		transport:           transport,
@@ -201,9 +208,13 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 
 	mux := http.NewServeMux()
 
-	// Public Landing Page, Brand Assets & Healthcheck
+	// Public Landing Page, Brand Assets & Observability Endpoints
 	mux.HandleFunc("/", s.handleRoot)
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/readyz", s.handleReadyz)
+	mux.HandleFunc("/metrics", s.handleMetrics)
+	mux.Handle("/metrics/prometheus", s.telemetry.MetricsHandler(s.cfg.MetricsBearerToken))
+	mux.HandleFunc("/version", s.handleVersion)
 	mux.HandleFunc("/favicon.ico", s.handleFavicon)
 	mux.HandleFunc("/favicon.png", s.handleFavicon)
 	mux.HandleFunc("/favicon.svg", s.handleFavicon)
@@ -211,9 +222,6 @@ func NewHTTPServer(cfg *config.Config, db *sql.DB, repo *database.Repository) *H
 	mux.HandleFunc("/logo.jpg", s.handleLogo)
 	mux.HandleFunc("/icon.png", s.handleLogo)
 	mux.HandleFunc("/apple-touch-icon.png", s.handleLogo)
-
-	// Prometheus Metrics Endpoint (Protected with Bearer Token Authentication)
-	mux.Handle("/metrics", s.telemetry.MetricsHandler(s.cfg.MetricsBearerToken))
 
 	// OAuth 2.1 & RFC 8414 Discovery Endpoints
 	mux.HandleFunc("/.well-known/oauth-authorization-server", s.handleOAuthMetadata)
@@ -375,10 +383,15 @@ func (r *statusRecorder) Flush() {
 
 func (s *HTTPServer) telemetryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.requestCount.Add(1)
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 
 		next.ServeHTTP(recorder, r)
+
+		if recorder.statusCode >= 400 {
+			s.errorCount.Add(1)
+		}
 
 		duration := time.Since(start)
 		clientID := r.Header.Get("X-Client-ID")
