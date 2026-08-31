@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"runtime"
 	"time"
@@ -39,14 +40,14 @@ type versionResponse struct {
 }
 
 // handleReadyz verifies that PostgreSQL and Redis dependencies are actively reachable.
-// Uses a strict 2-second timeout per dependency to prevent slow probes from hanging callers.
+// Uses a 5-second timeout per dependency to accommodate cross-region network roundtrips.
 func (s *HTTPServer) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	pgStatus := "ok"
@@ -56,6 +57,7 @@ func (s *HTTPServer) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if s.db == nil {
 		pgStatus = "unreachable"
 	} else if err := s.db.PingContext(ctx); err != nil {
+		log.Printf("[Readiness Probe] PostgreSQL ping failed: %v", err)
 		pgStatus = "unreachable"
 	}
 
@@ -63,6 +65,7 @@ func (s *HTTPServer) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if s.redisClient == nil {
 		redisStatus = "unreachable"
 	} else if err := s.redisClient.Ping(ctx).Err(); err != nil {
+		log.Printf("[Readiness Probe] Redis ping failed: %v", err)
 		redisStatus = "unreachable"
 	}
 
@@ -94,7 +97,7 @@ func (s *HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	var memStats runtime.MemStats
@@ -108,6 +111,7 @@ func (s *HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	} else {
 		pgStart := time.Now()
 		if err := s.db.PingContext(ctx); err != nil {
+			log.Printf("[Metrics] PostgreSQL ping failed: %v", err)
 			pgStatus = "unreachable"
 		} else {
 			pgLatencyMs = float64(time.Since(pgStart).Microseconds()) / 1000.0
@@ -122,6 +126,7 @@ func (s *HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	} else {
 		rStart := time.Now()
 		if err := s.redisClient.Ping(ctx).Err(); err != nil {
+			log.Printf("[Metrics] Redis ping failed: %v", err)
 			redisStatus = "unreachable"
 		} else {
 			redisLatencyMs = float64(time.Since(rStart).Microseconds()) / 1000.0
