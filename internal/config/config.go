@@ -5,11 +5,14 @@ import (
 	"bufio"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Config holds all server configuration variables.
@@ -77,7 +80,7 @@ func LoadConfig() (*Config, error) {
 		PostgresPassword:         getEnv("POSTGRES_PASSWORD", "postgres_secure_local_dev"),
 		PostgresDB:               getEnv("POSTGRES_DB", "social_mcp_db"),
 		PostgresSSLMode:          getEnv("POSTGRES_SSLMODE", "disable"),
-		RedisURL:                 getEnv("REDIS_URL", ""),
+		RedisURL:                 getEnv("REDIS_URL", getEnv("REDIS_PRIVATE_URL", getEnv("REDIS_TLS_URL", getEnv("UPSTASH_REDIS_URL", "")))),
 		RedisHost:                getEnv("REDIS_HOST", "localhost"),
 		RedisPort:                getEnvAsInt("REDIS_PORT", 6379),
 		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
@@ -183,6 +186,38 @@ func (c *Config) PostgresDSN() string {
 // RedisAddr returns the standard host:port address for Redis.
 func (c *Config) RedisAddr() string {
 	return fmt.Sprintf("%s:%d", c.RedisHost, c.RedisPort)
+}
+
+// RedisOptions constructs the redis.Options struct with automatic TLS negotiation.
+// Handles Upstash (rediss:// or upstash.io host), Render Redis addons, and explicit REDIS_TLS configurations.
+func (c *Config) RedisOptions() (*redis.Options, error) {
+	if c.RedisURL != "" {
+		opt, err := redis.ParseURL(c.RedisURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed parsing Redis URL: %w", err)
+		}
+		return opt, nil
+	}
+
+	if c.RedisHost == "" {
+		return nil, nil
+	}
+
+	opts := &redis.Options{
+		Addr:     c.RedisAddr(),
+		Password: c.RedisPassword,
+	}
+
+	// Automatically enable TLS for Upstash or explicit TLS flags
+	if strings.Contains(c.RedisHost, "upstash.io") || c.RedisPort == 6380 ||
+		strings.ToLower(os.Getenv("REDIS_TLS")) == "true" ||
+		strings.ToLower(os.Getenv("REDIS_SSL")) == "true" {
+		opts.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	return opts, nil
 }
 
 func getEnv(key, fallback string) string {
