@@ -17,6 +17,7 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/config"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/database"
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/server"
+	"github.com/redis/go-redis/v9"
 )
 
 // Version and Commit hold the build-time application version and git commit SHA.
@@ -81,6 +82,23 @@ func run(ctx context.Context, cfg *config.Config) error {
 		} else {
 			log.Println("Database schema is up to date (0 pending migrations).")
 		}
+	}
+
+	// Startup Redis Verification
+	if redisOpts, err := cfg.RedisOptions(); err != nil {
+		log.Printf("[Redis Startup] ERROR constructing Redis options: %v", err)
+	} else if redisOpts != nil {
+		testRdb := redis.NewClient(redisOpts)
+		rPingCtx, rPingCancel := context.WithTimeout(ctx, 3*time.Second)
+		if rErr := testRdb.Ping(rPingCtx).Err(); rErr != nil {
+			log.Printf("[Redis Startup] Warning: Redis ping failed (%v). Running in degraded mode.", rErr)
+		} else {
+			log.Printf("[Redis Startup] Redis connection established and verified via ping to %s (TLS=%t).", redisOpts.Addr, redisOpts.TLSConfig != nil)
+		}
+		_ = testRdb.Close()
+		rPingCancel()
+	} else {
+		log.Println("[Redis Startup] No Redis configuration detected. Running in memory-only mode.")
 	}
 
 	log.Printf("Twitter Integration Status: ClientID configured: %t, RedirectURI: %s", cfg.TwitterClientID != "", cfg.TwitterRedirectURI)
