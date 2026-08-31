@@ -19,17 +19,20 @@ import (
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/server"
 )
 
-// Version and AppVersion represent the current version of the server (set by ldflags).
+// Version and Commit hold the build-time application version and git commit SHA.
 var (
-	version    = "0.1.0"
-	AppVersion = "0.1.0"
+	version = "1.0.0"
+	commit  = "a4c74dc"
 )
 
 func main() {
-	if version != "" && version != "0.1.0" {
-		AppVersion = version
+	if version != "" {
+		server.Version = version
 	}
-	log.Printf("Starting Social Publishing & Analytics MCP Server v%s", AppVersion)
+	if commit != "" {
+		server.Commit = commit
+	}
+	log.Printf("Starting Social Publishing & Analytics MCP Server v%s (commit: %s)", server.Version, server.Commit)
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
