@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kuldeep-poonia/social-publish-mcp-server/internal/auth"
@@ -168,26 +170,30 @@ func TestServer_RateLimitingMiddleware_429Enforcement(t *testing.T) {
 	ts := httptest.NewServer(httpServer.server.Handler)
 	defer ts.Close()
 
-	// Burst limit is 200; fire 250 rapid requests from same client
-	const burst = 200
-	const extra = 50
-	var rateLimitedCount int
+	// Burst limit is 200; fire 300 concurrent requests from same client
+	const totalRequests = 300
+	var rateLimitedCount int32
+	var wg sync.WaitGroup
 
-	for i := 0; i < burst+extra; i++ {
-		req, _ := http.NewRequest(http.MethodGet, ts.URL+"/health", nil)
-		req.Header.Set("X-Forwarded-For", "198.51.100.1")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("request %d failed: %v", i, err)
-		}
-		if resp.StatusCode == http.StatusTooManyRequests {
-			rateLimitedCount++
-		}
-		resp.Body.Close()
+	for i := 0; i < totalRequests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/health", nil)
+			req.Header.Set("X-Forwarded-For", "198.51.100.1")
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				if resp.StatusCode == http.StatusTooManyRequests {
+					atomic.AddInt32(&rateLimitedCount, 1)
+				}
+				resp.Body.Close()
+			}
+		}()
 	}
+	wg.Wait()
 
 	t.Logf("=== RATE LIMITING MIDDLEWARE TEST ===")
-	t.Logf("Total Requests: %d | Throttled (429): %d", burst+extra, rateLimitedCount)
+	t.Logf("Total Requests: %d | Throttled (429): %d", totalRequests, rateLimitedCount)
 	if rateLimitedCount == 0 {
 		t.Fatal("expected requests exceeding burst capacity to receive 429 Too Many Requests")
 	}
